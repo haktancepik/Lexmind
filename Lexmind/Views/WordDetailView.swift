@@ -1,0 +1,443 @@
+//
+//  WordDetailView.swift
+//  Lexmind
+//
+
+import SwiftUI
+import SwiftData
+
+struct WordDetailView: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var word: Word
+    @Query private var allWords: [Word]
+
+    @State private var analyzer = WordAnalyzer()
+    @State private var isRegenerating = false
+    @State private var error: String?
+    @State private var pendingAddTerm: String? = nil
+    @State private var navigationTerm: String? = nil
+    @State private var isAddingFromChip = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                header
+                phoneticsCard
+                meaningCard
+                examplesCard
+                relationsCard
+                familyCard
+                notesCard
+                if let card = word.card {
+                    scheduleCard(card: card)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle(word.term)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $navigationTerm) { term in
+            if let target = allWords.first(where: { $0.term == term }) {
+                WordDetailView(word: target)
+            } else {
+                Text("Kelime bulunamadı").foregroundStyle(.secondary)
+            }
+        }
+        .confirmationDialog(
+            "Bu kelimeyi kütüphanene eklemek ister misin?",
+            isPresented: Binding(
+                get: { pendingAddTerm != nil },
+                set: { if !$0 { pendingAddTerm = nil } }
+            ),
+            presenting: pendingAddTerm
+        ) { term in
+            Button("Ekle ve Aç") {
+                Task { await addWordFromTerm(term) }
+            }
+            Button("Vazgeç", role: .cancel) {
+                pendingAddTerm = nil
+            }
+        } message: { term in
+            Text("\"\(term)\" kelimesi AI ile analiz edilip kütüphanene eklenecek.")
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        regenerate()
+                    } label: {
+                        Label("AI ile Yeniden Analiz", systemImage: "sparkles")
+                    }
+                    Button(role: .destructive) {
+                        delete()
+                    } label: {
+                        Label("Sil", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(word.term)
+                    .font(.system(.largeTitle, design: .serif, weight: .bold))
+                Spacer()
+                if isRegenerating {
+                    ProgressView()
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if !word.partOfSpeech.isEmpty {
+                        tag(word.partOfSpeech, color: .blue)
+                    }
+                    if !word.countability.isEmpty,
+                       word.countability.lowercased() != "n/a" {
+                        tag(word.countability, color: .purple)
+                    }
+                    if let state = word.card?.state {
+                        tag(state.label, color: .green)
+                    }
+                    if let lv = word.level {
+                        tag(lv.label, color: cefrColor(lv))
+                    }
+                    ForEach(word.topics) { tp in
+                        Label(tp.label, systemImage: tp.symbol)
+                            .font(.caption2)
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(.tertiary, in: Capsule())
+                    }
+                }
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func tag(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(color)
+    }
+
+    private var phoneticsCard: some View {
+        sectionCard(title: "Telaffuz", icon: "waveform") {
+            if word.ipa.isEmpty {
+                Text("Henüz IPA eklenmedi.").foregroundStyle(.secondary)
+            } else {
+                Text(word.ipa)
+                    .font(.system(.title3, design: .monospaced))
+            }
+        }
+    }
+
+    private var meaningCard: some View {
+        sectionCard(title: "Anlam", icon: "text.bubble") {
+            if !word.turkishMeaning.isEmpty {
+                Text(word.turkishMeaning)
+                    .font(.title3.bold())
+            }
+            if !word.definition.isEmpty {
+                Text(word.definition)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            if word.turkishMeaning.isEmpty, word.definition.isEmpty {
+                Text("Anlam henüz eklenmedi.").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var examplesCard: some View {
+        sectionCard(title: "Örnek Cümleler", icon: "quote.bubble") {
+            if word.examples.isEmpty {
+                Text("Örnek cümle yok.").foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(word.examples.enumerated()), id: \.offset) { idx, line in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(idx + 1)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, alignment: .leading)
+                        Text(highlight(line))
+                            .font(.body)
+                    }
+                    if idx < word.examples.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    private func highlight(_ sentence: String) -> AttributedString {
+        var attr = AttributedString(sentence)
+        let lowerTerm = word.term.lowercased()
+        let plain = AttributedString(sentence).characters
+        let str = String(plain)
+        if let range = str.range(of: lowerTerm, options: .caseInsensitive) {
+            if let attrRange = Range(NSRange(range, in: str), in: attr) {
+                attr[attrRange].font = .body.bold()
+                attr[attrRange].foregroundColor = .accentColor
+            }
+        }
+        return attr
+    }
+
+    private var notesCard: some View {
+        sectionCard(title: "Notlar", icon: "note.text") {
+            TextField("Kendi notunu yaz…", text: $word.notes, axis: .vertical)
+                .lineLimit(2...8)
+        }
+    }
+
+    @ViewBuilder
+    private var relationsCard: some View {
+        if !word.relations.isEmpty {
+            sectionCard(title: "İlişkili Kelimeler", icon: "link") {
+                let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(RelationKind.allCases) { kind in
+                        if let items = grouped[kind], !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label(kind.label, systemImage: kind.symbol)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.secondary)
+                                relationChipsRow(terms: items.map { $0.targetTerm })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var familyCard: some View {
+        let hasRoot = (word.familyRoot?.isEmpty == false)
+        let hasMembers = !word.familyMembers.isEmpty
+        if hasRoot || hasMembers {
+            sectionCard(title: "Kelime Ailesi", icon: "person.3") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let root = word.familyRoot, !root.isEmpty {
+                        HStack(spacing: 6) {
+                            Text("Kök:")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                handleTermTap(root)
+                            } label: {
+                                Text(root)
+                                    .font(.subheadline.bold())
+                                    .padding(.horizontal, 10).padding(.vertical, 4)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    if hasMembers {
+                        relationChipsRow(terms: word.familyMembers)
+                    }
+                }
+            }
+        }
+    }
+
+    private func relationChipsRow(terms: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(terms, id: \.self) { term in
+                    Button {
+                        handleTermTap(term)
+                    } label: {
+                        Text(term)
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                            .overlay(
+                                Capsule().stroke(termExists(term) ? Color.accentColor.opacity(0.4) : .clear, lineWidth: 1)
+                            )
+                            .foregroundStyle(termExists(term) ? Color.accentColor : Color.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func termExists(_ term: String) -> Bool {
+        allWords.contains(where: { $0.term == term.lowercased() })
+    }
+
+    private func handleTermTap(_ term: String) {
+        let normalized = term.lowercased()
+        if termExists(normalized) {
+            navigationTerm = normalized
+        } else {
+            pendingAddTerm = normalized
+        }
+    }
+
+    private func addWordFromTerm(_ term: String) async {
+        guard !isAddingFromChip else { return }
+        isAddingFromChip = true
+        defer { isAddingFromChip = false }
+
+        let normalized = term.lowercased()
+        guard !allWords.contains(where: { $0.term == normalized }) else {
+            pendingAddTerm = nil
+            navigationTerm = normalized
+            return
+        }
+
+        do {
+            let result = try await analyzer.analyze(term: normalized)
+            let newWord = Word(
+                term: normalized,
+                partOfSpeech: result.partOfSpeech,
+                ipa: result.ipa,
+                countability: result.countability,
+                definition: result.definition,
+                turkishMeaning: result.turkishMeaning,
+                examples: result.examples,
+                level: CEFRLevel(rawValue: result.cefrLevel.uppercased()),
+                topics: result.topics.compactMap { WordTopic(rawValue: $0.lowercased()) },
+                familyRoot: result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased(),
+                familyMembers: result.familyMembers.map { $0.lowercased() }
+            )
+            let card = FSRSCard()
+            card.word = newWord
+            newWord.card = card
+            context.insert(newWord)
+            applyRelations(to: newWord, from: result)
+            try context.save()
+            pendingAddTerm = nil
+            navigationTerm = normalized
+        } catch {
+            self.error = error.localizedDescription
+            pendingAddTerm = nil
+        }
+    }
+
+    private func applyRelations(to target: Word, from result: WordAnalysis) {
+        for term in result.synonyms where !term.isEmpty {
+            target.relations.append(WordRelation(kind: .synonym, targetTerm: term, source: target))
+        }
+        for term in result.antonyms where !term.isEmpty {
+            target.relations.append(WordRelation(kind: .antonym, targetTerm: term, source: target))
+        }
+        for term in result.related where !term.isEmpty {
+            target.relations.append(WordRelation(kind: .related, targetTerm: term, source: target))
+        }
+    }
+
+    private func cefrColor(_ level: CEFRLevel) -> Color {
+        switch level.tint {
+        case "green": return .green
+        case "mint": return .mint
+        case "yellow": return .yellow
+        case "orange": return .orange
+        case "red": return .red
+        case "purple": return .purple
+        default: return .accentColor
+        }
+    }
+
+    private func scheduleCard(card: FSRSCard) -> some View {
+        sectionCard(title: "FSRS Programı", icon: "clock.arrow.circlepath") {
+            VStack(alignment: .leading, spacing: 6) {
+                row("Durum", value: card.state.label)
+                row("Vade", value: card.due.formatted(date: .abbreviated, time: .shortened))
+                row("Kararlılık", value: String(format: "%.2f gün", card.stability))
+                row("Zorluk", value: String(format: "%.2f / 10", card.difficulty))
+                row("Tekrar", value: "\(card.reps)")
+                row("Unutma", value: "\(card.lapses)")
+            }
+        }
+    }
+
+    private func row(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).fontWeight(.medium)
+        }
+        .font(.subheadline)
+    }
+
+    private func sectionCard<Content: View>(title: String,
+                                            icon: String,
+                                            @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.regularMaterial)
+        )
+    }
+
+    private func regenerate() {
+        error = nil
+        isRegenerating = true
+        Task {
+            defer { isRegenerating = false }
+            do {
+                let result = try await analyzer.analyze(term: word.term)
+                word.partOfSpeech = result.partOfSpeech
+                word.ipa = result.ipa
+                word.countability = result.countability
+                word.definition = result.definition
+                word.turkishMeaning = result.turkishMeaning
+                word.examples = result.examples
+                if let lv = CEFRLevel(rawValue: result.cefrLevel.uppercased()) {
+                    word.level = lv
+                }
+                let parsedTopics = result.topics.compactMap { WordTopic(rawValue: $0.lowercased()) }
+                if !parsedTopics.isEmpty {
+                    word.topics = parsedTopics
+                }
+                word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
+                word.familyMembers = result.familyMembers.map { $0.lowercased() }
+
+                for relation in word.relations {
+                    context.delete(relation)
+                }
+                word.relations.removeAll()
+                applyRelations(to: word, from: result)
+
+                try context.save()
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func delete() {
+        context.delete(word)
+        try? context.save()
+        dismiss()
+    }
+}
+
+#Preview {
+    NavigationStack {
+        if let sample = try? PreviewData.container.mainContext.fetch(FetchDescriptor<Word>()).first {
+            WordDetailView(word: sample)
+        }
+    }
+    .modelContainer(PreviewData.container)
+}
