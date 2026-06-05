@@ -18,6 +18,14 @@ struct StudyView: View {
     @State private var sessionReviewed = 0
     @State private var sessionStartedAt: Date = .now
 
+    @State private var analyzer = WordAnalyzer()
+    @State private var lookup: QuickLookupService?
+    @State private var activePopoverTerm: String?
+    @State private var isAddingFromPopover = false
+    @State private var recentlyAddedTerm: String?
+    @State private var toastTask: Task<Void, Never>?
+    @State private var popoverError: String?
+
     private let scheduler = FSRSScheduler()
 
     private var goal: DailyGoal {
@@ -49,7 +57,24 @@ struct StudyView: View {
                     }
                 }
             }
-            .onAppear(perform: buildQueue)
+            .onAppear {
+                buildQueue()
+                if lookup == nil {
+                    lookup = QuickLookupService(analyzer: analyzer)
+                }
+            }
+            .overlay(alignment: .top) { addedToast }
+            .popover(
+                item: Binding(
+                    get: { activePopoverTerm.map(StudyLookupTerm.init) },
+                    set: { activePopoverTerm = $0?.value }
+                ),
+                attachmentAnchor: .point(.top),
+                arrowEdge: .top
+            ) { wrapper in
+                lookupCard(for: wrapper.value)
+                    .presentationCompactAdaptation(.popover)
+            }
         }
     }
 
@@ -136,8 +161,7 @@ struct StudyView: View {
                     .font(.title2.bold())
             }
             if !word.definition.isEmpty {
-                Text(word.definition)
-                    .foregroundStyle(.secondary)
+                tappable(text: word.definition, baseUIColor: .secondaryLabel)
             }
 
             if !word.examples.isEmpty {
@@ -146,7 +170,23 @@ struct StudyView: View {
                 ForEach(Array(word.examples.enumerated()), id: \.offset) { idx, line in
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
-                        Text(highlight(line, term: word.term))
+                        tappable(text: line,
+                                 highlightedTerm: word.term.lowercased(),
+                                 baseUIColor: .label)
+                    }
+                    .font(.callout)
+                }
+            }
+
+            if !word.inflectionExamples.isEmpty {
+                Divider().padding(.vertical, 4)
+                Text("Çekim Örnekleri").font(.headline)
+                ForEach(Array(word.inflectionExamples.enumerated()), id: \.offset) { idx, line in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("•")
+                        tappable(text: line,
+                                 highlightedTerm: word.familyRoot?.lowercased() ?? word.term.lowercased(),
+                                 baseUIColor: .label)
                     }
                     .font(.callout)
                 }
@@ -160,22 +200,129 @@ struct StudyView: View {
         )
     }
 
+    @ViewBuilder
+    private func tappable(text: String,
+                          highlightedTerm: String? = nil,
+                          baseUIColor: UIColor) -> some View {
+        TappableText(
+            text: text,
+            highlightedTerm: highlightedTerm,
+            baseColor: baseUIColor,
+            onTokenTap: { term in handleTokenTap(term) }
+        )
+    }
+
+    @ViewBuilder
+    private func lookupCard(for term: String) -> some View {
+        if let lookup {
+            WordQuickLookupCard(
+                phase: lookup.phase,
+                isAlreadyInLibrary: termExists(term),
+                isAdding: isAddingFromPopover,
+                onAddToLibrary: { t in
+                    Task { await addFromPopover(t) }
+                },
+                onRetry: { t in
+                    Task { await lookup.lookup(term: t, in: words) }
+                }
+            )
+        }
+    }
+
+    private func handleTokenTap(_ term: String) {
+        guard let lookup else { return }
+        let resolvedSync = lookup.prime(term: term, in: words)
+        if !resolvedSync {
+            Task { await lookup.fetchFromAI(term: term) }
+        }
+        activePopoverTerm = term
+    }
+
+    private func termExists(_ term: String) -> Bool {
+        words.contains(where: { $0.term == term.lowercased() })
+    }
+
+    private func addFromPopover(_ term: String) async {
+        guard !isAddingFromPopover else { return }
+        isAddingFromPopover = true
+        defer { isAddingFromPopover = false }
+
+        let normalized = term.lowercased()
+        guard !words.contains(where: { $0.term == normalized }) else {
+            activePopoverTerm = nil
+            return
+        }
+
+        do {
+            let result = try await analyzer.analyze(term: normalized)
+            let newWord = Word(
+                term: normalized,
+                partOfSpeech: result.partOfSpeech,
+                ipa: result.ipa,
+                countability: result.countability,
+                definition: result.definition,
+                turkishMeaning: result.turkishMeaning,
+                examples: result.examples,
+                level: CEFRLevel(rawValue: result.cefrLevel.uppercased()),
+                topics: result.topics.compactMap { WordTopic(rawValue: $0.lowercased()) },
+                familyRoot: result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased(),
+                familyMembers: result.familyMembers.map { $0.lowercased() },
+                inflectionExamples: result.inflectionExamples
+            )
+            let card = FSRSCard()
+            card.word = newWord
+            newWord.card = card
+            context.insert(newWord)
+            for synonym in result.synonyms where !synonym.isEmpty {
+                newWord.relations.append(WordRelation(kind: .synonym, targetTerm: synonym, source: newWord))
+            }
+            for antonym in result.antonyms where !antonym.isEmpty {
+                newWord.relations.append(WordRelation(kind: .antonym, targetTerm: antonym, source: newWord))
+            }
+            for related in result.related where !related.isEmpty {
+                newWord.relations.append(WordRelation(kind: .related, targetTerm: related, source: newWord))
+            }
+            try context.save()
+
+            activePopoverTerm = nil
+            lookup?.invalidate(term: normalized)
+            withAnimation { recentlyAddedTerm = normalized }
+            toastTask?.cancel()
+            toastTask = Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation { recentlyAddedTerm = nil }
+                }
+            }
+        } catch {
+            popoverError = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private var addedToast: some View {
+        if let term = recentlyAddedTerm {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("\"\(term)\" listene eklendi")
+                    .font(.subheadline.bold())
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.green.opacity(0.4), lineWidth: 1))
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     private func badge(_ text: String, color: Color) -> some View {
         Text(text)
             .font(.caption.bold())
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)
-    }
-
-    private func highlight(_ text: String, term: String) -> AttributedString {
-        var attr = AttributedString(text)
-        if let range = text.range(of: term, options: .caseInsensitive),
-           let attrRange = Range(NSRange(range, in: text), in: attr) {
-            attr[attrRange].font = .callout.bold()
-            attr[attrRange].foregroundColor = .accentColor
-        }
-        return attr
     }
 
     @ViewBuilder
@@ -299,6 +446,11 @@ struct StudyView: View {
         sessionStartedAt = .now
         current = queue.first
     }
+}
+
+private struct StudyLookupTerm: Identifiable, Hashable {
+    let value: String
+    var id: String { value }
 }
 
 #Preview {

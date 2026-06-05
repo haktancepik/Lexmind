@@ -19,6 +19,12 @@ struct WordDetailView: View {
     @State private var navigationTerm: String? = nil
     @State private var isAddingFromChip = false
 
+    @State private var lookup: QuickLookupService?
+    @State private var activePopoverTerm: String? = nil
+    @State private var isAddingFromPopover = false
+    @State private var recentlyAddedTerm: String? = nil
+    @State private var toastTask: Task<Void, Never>?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -26,6 +32,7 @@ struct WordDetailView: View {
                 phoneticsCard
                 meaningCard
                 examplesCard
+                inflectionExamplesCard
                 relationsCard
                 familyCard
                 notesCard
@@ -37,6 +44,23 @@ struct WordDetailView: View {
         }
         .navigationTitle(word.term)
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) { addedToast }
+        .onAppear {
+            if lookup == nil {
+                lookup = QuickLookupService(analyzer: analyzer)
+            }
+        }
+        .popover(
+            item: Binding(
+                get: { activePopoverTerm.map(LookupTerm.init) },
+                set: { activePopoverTerm = $0?.value }
+            ),
+            attachmentAnchor: .point(.top),
+            arrowEdge: .top
+        ) { wrapper in
+            lookupCard(for: wrapper.value)
+                .presentationCompactAdaptation(.popover)
+        }
         .navigationDestination(item: $navigationTerm) { term in
             if let target = allWords.first(where: { $0.term == term }) {
                 WordDetailView(word: target)
@@ -146,8 +170,7 @@ struct WordDetailView: View {
                     .font(.title3.bold())
             }
             if !word.definition.isEmpty {
-                Text(word.definition)
-                    .foregroundStyle(.secondary)
+                tappable(text: word.definition, baseUIColor: .secondaryLabel)
                     .padding(.top, 4)
             }
             if word.turkishMeaning.isEmpty, word.definition.isEmpty {
@@ -167,8 +190,7 @@ struct WordDetailView: View {
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
                             .frame(width: 18, alignment: .leading)
-                        Text(highlight(line))
-                            .font(.body)
+                        tappable(text: line, highlightedTerm: word.term.lowercased(), baseUIColor: .label)
                     }
                     if idx < word.examples.count - 1 {
                         Divider()
@@ -178,18 +200,100 @@ struct WordDetailView: View {
         }
     }
 
-    private func highlight(_ sentence: String) -> AttributedString {
-        var attr = AttributedString(sentence)
-        let lowerTerm = word.term.lowercased()
-        let plain = AttributedString(sentence).characters
-        let str = String(plain)
-        if let range = str.range(of: lowerTerm, options: .caseInsensitive) {
-            if let attrRange = Range(NSRange(range, in: str), in: attr) {
-                attr[attrRange].font = .body.bold()
-                attr[attrRange].foregroundColor = .accentColor
+    @ViewBuilder
+    private var inflectionExamplesCard: some View {
+        if !word.inflectionExamples.isEmpty {
+            sectionCard(title: "Çekim Örnekleri", icon: "arrow.triangle.branch") {
+                ForEach(Array(word.inflectionExamples.enumerated()), id: \.offset) { idx, line in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(idx + 1)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, alignment: .leading)
+                        tappable(text: line, highlightedTerm: word.familyRoot?.lowercased() ?? word.term.lowercased(), baseUIColor: .label)
+                    }
+                    if idx < word.inflectionExamples.count - 1 {
+                        Divider()
+                    }
+                }
             }
         }
-        return attr
+    }
+
+    @ViewBuilder
+    private func tappable(text: String, highlightedTerm: String? = nil, baseUIColor: UIColor) -> some View {
+        TappableText(
+            text: text,
+            highlightedTerm: highlightedTerm,
+            baseColor: baseUIColor,
+            onTokenTap: { term in
+                handleTokenTap(term)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func lookupCard(for term: String) -> some View {
+        if let lookup {
+            WordQuickLookupCard(
+                phase: lookup.phase,
+                isAlreadyInLibrary: termExists(term),
+                isAdding: isAddingFromPopover,
+                onOpenDetail: { t in
+                    activePopoverTerm = nil
+                    navigationTerm = t
+                },
+                onAddToLibrary: { t in
+                    Task { await addFromPopover(t) }
+                },
+                onRetry: { t in
+                    Task { await lookup.lookup(term: t, in: allWords) }
+                }
+            )
+        }
+    }
+
+    private func handleTokenTap(_ term: String) {
+        guard let lookup else { return }
+        let resolvedSync = lookup.prime(term: term, in: allWords)
+        if !resolvedSync {
+            Task { await lookup.fetchFromAI(term: term) }
+        }
+        activePopoverTerm = term
+    }
+
+    private func addFromPopover(_ term: String) async {
+        await addWordFromTerm(term, openAfterAdd: false)
+        if error == nil {
+            activePopoverTerm = nil
+            lookup?.invalidate(term: term)
+            withAnimation { recentlyAddedTerm = term }
+            toastTask?.cancel()
+            toastTask = Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation { recentlyAddedTerm = nil }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var addedToast: some View {
+        if let term = recentlyAddedTerm {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("\"\(term)\" listene eklendi")
+                    .font(.subheadline.bold())
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.green.opacity(0.4), lineWidth: 1))
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
     }
 
     private var notesCard: some View {
@@ -287,15 +391,23 @@ struct WordDetailView: View {
         }
     }
 
-    private func addWordFromTerm(_ term: String) async {
-        guard !isAddingFromChip else { return }
-        isAddingFromChip = true
-        defer { isAddingFromChip = false }
+    private func addWordFromTerm(_ term: String, openAfterAdd: Bool = true) async {
+        if openAfterAdd {
+            guard !isAddingFromChip else { return }
+            isAddingFromChip = true
+        } else {
+            guard !isAddingFromPopover else { return }
+            isAddingFromPopover = true
+        }
+        defer {
+            if openAfterAdd { isAddingFromChip = false }
+            else { isAddingFromPopover = false }
+        }
 
         let normalized = term.lowercased()
         guard !allWords.contains(where: { $0.term == normalized }) else {
             pendingAddTerm = nil
-            navigationTerm = normalized
+            if openAfterAdd { navigationTerm = normalized }
             return
         }
 
@@ -312,7 +424,8 @@ struct WordDetailView: View {
                 level: CEFRLevel(rawValue: result.cefrLevel.uppercased()),
                 topics: result.topics.compactMap { WordTopic(rawValue: $0.lowercased()) },
                 familyRoot: result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased(),
-                familyMembers: result.familyMembers.map { $0.lowercased() }
+                familyMembers: result.familyMembers.map { $0.lowercased() },
+                inflectionExamples: result.inflectionExamples
             )
             let card = FSRSCard()
             card.word = newWord
@@ -321,7 +434,7 @@ struct WordDetailView: View {
             applyRelations(to: newWord, from: result)
             try context.save()
             pendingAddTerm = nil
-            navigationTerm = normalized
+            if openAfterAdd { navigationTerm = normalized }
         } catch {
             self.error = error.localizedDescription
             pendingAddTerm = nil
@@ -412,6 +525,7 @@ struct WordDetailView: View {
                 }
                 word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
                 word.familyMembers = result.familyMembers.map { $0.lowercased() }
+                word.inflectionExamples = result.inflectionExamples
 
                 for relation in word.relations {
                     context.delete(relation)
@@ -431,6 +545,11 @@ struct WordDetailView: View {
         try? context.save()
         dismiss()
     }
+}
+
+private struct LookupTerm: Identifiable, Hashable {
+    let value: String
+    var id: String { value }
 }
 
 #Preview {

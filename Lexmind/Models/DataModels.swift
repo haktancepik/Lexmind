@@ -157,6 +157,7 @@ final class Word {
     var topicsRaw: [String]
     var familyRoot: String?
     var familyMembersRaw: [String] = []
+    var inflectionExamplesRaw: [String] = []
     var createdAt: Date
     var lastStudiedAt: Date?
 
@@ -184,6 +185,11 @@ final class Word {
         set { familyMembersRaw = newValue.map { $0.lowercased() } }
     }
 
+    var inflectionExamples: [String] {
+        get { inflectionExamplesRaw }
+        set { inflectionExamplesRaw = newValue }
+    }
+
     init(
         term: String,
         partOfSpeech: String = "",
@@ -197,6 +203,7 @@ final class Word {
         topics: [WordTopic] = [],
         familyRoot: String? = nil,
         familyMembers: [String] = [],
+        inflectionExamples: [String] = [],
         createdAt: Date = .now
     ) {
         self.term = term
@@ -211,6 +218,7 @@ final class Word {
         self.topicsRaw = topics.map { $0.rawValue }
         self.familyRoot = familyRoot
         self.familyMembersRaw = familyMembers.map { $0.lowercased() }
+        self.inflectionExamplesRaw = inflectionExamples
         self.createdAt = createdAt
     }
 }

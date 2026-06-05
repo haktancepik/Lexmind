@@ -22,6 +22,7 @@ struct AddWordView: View {
     @State private var definition = ""
     @State private var turkishMeaning = ""
     @State private var examples: [String] = ["", "", "", "", ""]
+    @State private var inflectionExamples: [String] = ["", "", ""]
     @State private var notes = ""
     @State private var level: CEFRLevel? = nil
     @State private var selectedTopics: Set<WordTopic> = []
@@ -74,6 +75,13 @@ struct AddWordView: View {
                 Section("Örnek Cümleler (5)") {
                     ForEach(0..<examples.count, id: \.self) { i in
                         TextField("Cümle \(i + 1)", text: $examples[i], axis: .vertical)
+                            .lineLimit(1...3)
+                    }
+                }
+
+                Section("Çekim Örnekleri (3)") {
+                    ForEach(0..<inflectionExamples.count, id: \.self) { i in
+                        TextField("Çekimli cümle \(i + 1)", text: $inflectionExamples[i], axis: .vertical)
                             .lineLimit(1...3)
                     }
                 }
@@ -144,6 +152,9 @@ struct AddWordView: View {
         var newExamples = a.examples
         while newExamples.count < 5 { newExamples.append("") }
         examples = Array(newExamples.prefix(5))
+        var newInfl = a.inflectionExamples
+        while newInfl.count < 3 { newInfl.append("") }
+        inflectionExamples = Array(newInfl.prefix(3))
         if let lv = CEFRLevel(rawValue: a.cefrLevel.uppercased()) {
             level = lv
         }
@@ -166,6 +177,10 @@ struct AddWordView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
+        let filteredInflections = inflectionExamples
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
         let trimmedRoot = familyRoot.trimmingCharacters(in: .whitespacesAndNewlines)
         let word = Word(
             term: cleanedTerm,
@@ -179,7 +194,8 @@ struct AddWordView: View {
             level: level,
             topics: Array(selectedTopics),
             familyRoot: trimmedRoot.isEmpty ? nil : trimmedRoot,
-            familyMembers: familyMembers
+            familyMembers: familyMembers,
+            inflectionExamples: filteredInflections
         )
         let card = FSRSCard()
         card.word = word

@@ -46,6 +46,9 @@ struct WordAnalysis: Equatable {
 
     @Guide(description: "Up to 6 derived forms in the same family (e.g. for 'create': created, creating, creation, creative). Lowercase.", .count(0...6))
     var familyMembers: [String]
+
+    @Guide(description: "Three example sentences. EACH sentence must use a DIFFERENT inflected/derived form of the word (e.g. for 'create': one with 'created' past tense, one with 'creating' gerund, one with 'creation' noun). Do not repeat the same form.", .count(3))
+    var inflectionExamples: [String]
 }
 
 enum WordAnalyzerError: LocalizedError {
@@ -95,7 +98,8 @@ final class WordAnalyzer {
             "Always return the IPA in /slashes/."
             "Part of speech must be a single English word (noun/verb/adjective/adverb/preposition/etc.)."
             "Countability applies only to nouns; for non-nouns return N/A."
-            "Examples must be natural, varied in context, and clearly demonstrate the word's usage."
+            "The five 'examples' should use the base form naturally; do not force varied inflections there."
+            "For 'inflectionExamples', each of the three sentences must use a distinct family member (past tense / gerund / noun derivation / comparative / etc.) — never repeat the same form."
             "Turkish meaning must be a short, idiomatic Turkish translation."
             "Provide synonyms/antonyms/related and word family only when meaningful; return empty arrays otherwise."
         }
