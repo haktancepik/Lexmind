@@ -19,6 +19,7 @@ struct StudyView: View {
     @State private var sessionStartedAt: Date = .now
 
     @State private var analyzer = WordAnalyzer()
+    @State private var verifier = RelationVerifier()
     @State private var lookup: QuickLookupService?
     @State private var activePopoverTerm: String?
     @State private var isAddingFromPopover = false
@@ -191,6 +192,9 @@ struct StudyView: View {
                     .font(.callout)
                 }
             }
+
+            familySection(word: word)
+            relationsSection(word: word)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
@@ -198,6 +202,102 @@ struct StudyView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.regularMaterial)
         )
+    }
+
+    @ViewBuilder
+    private func familySection(word: Word) -> some View {
+        let hasRoot = (word.familyRoot?.isEmpty == false)
+        let hasMembers = !word.familyMembers.isEmpty
+        if hasRoot || hasMembers {
+            Divider().padding(.vertical, 4)
+            Text("Kelime Ailesi").font(.headline)
+            VStack(alignment: .leading, spacing: 8) {
+                if let root = word.familyRoot, !root.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("Kök:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            handleTokenTap(root)
+                        } label: {
+                            Text(root)
+                                .font(.caption.bold())
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if hasMembers {
+                    relationChipsRow(items: word.familyMembers.map {
+                        (term: $0, origin: word.familySource(for: $0))
+                    })
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func relationsSection(word: Word) -> some View {
+        if !word.relations.isEmpty {
+            Divider().padding(.vertical, 4)
+            Text("Kelime Ağı").font(.headline)
+            let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(RelationKind.allCases) { kind in
+                    if let items = grouped[kind], !items.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(kind.label, systemImage: kind.symbol)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.secondary)
+                            relationChipsRow(items: sortedItems(items))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func sortedItems(_ relations: [WordRelation]) -> [(term: String, origin: RelationSource)] {
+        relations
+            .map { (term: $0.targetTerm, origin: $0.origin) }
+            .sorted { ($0.origin == .verified ? 0 : 1) < ($1.origin == .verified ? 0 : 1) }
+    }
+
+    private func relationChipsRow(items: [(term: String, origin: RelationSource)]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(items, id: \.term) { item in
+                    Button {
+                        handleTokenTap(item.term)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(item.term)
+                                .font(.caption.weight(.medium))
+                            Image(systemName: item.origin.symbol)
+                                .font(.caption2)
+                                .foregroundStyle(item.origin == .verified ? .green : .orange)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                        .overlay(
+                            Capsule().stroke(
+                                item.origin == .verified
+                                    ? Color.green.opacity(0.5)
+                                    : Color.orange.opacity(0.35),
+                                style: StrokeStyle(
+                                    lineWidth: 1,
+                                    dash: item.origin == .verified ? [] : [3, 2]
+                                )
+                            )
+                        )
+                        .foregroundStyle(termExists(item.term) ? Color.accentColor : Color.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -273,15 +373,7 @@ struct StudyView: View {
             card.word = newWord
             newWord.card = card
             context.insert(newWord)
-            for synonym in result.synonyms where !synonym.isEmpty {
-                newWord.relations.append(WordRelation(kind: .synonym, targetTerm: synonym, source: newWord))
-            }
-            for antonym in result.antonyms where !antonym.isEmpty {
-                newWord.relations.append(WordRelation(kind: .antonym, targetTerm: antonym, source: newWord))
-            }
-            for related in result.related where !related.isEmpty {
-                newWord.relations.append(WordRelation(kind: .related, targetTerm: related, source: newWord))
-            }
+            await verifier.applyVerifiedRelations(to: newWord, from: result)
             try context.save()
 
             activePopoverTerm = nil

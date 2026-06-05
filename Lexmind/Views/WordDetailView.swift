@@ -13,6 +13,7 @@ struct WordDetailView: View {
     @Query private var allWords: [Word]
 
     @State private var analyzer = WordAnalyzer()
+    @State private var verifier = RelationVerifier()
     @State private var isRegenerating = false
     @State private var error: String?
     @State private var pendingAddTerm: String? = nil
@@ -315,7 +316,7 @@ struct WordDetailView: View {
                                 Label(kind.label, systemImage: kind.symbol)
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.secondary)
-                                relationChipsRow(terms: items.map { $0.targetTerm })
+                                relationChipsRow(items: sortedItems(items))
                             }
                         }
                     }
@@ -349,28 +350,51 @@ struct WordDetailView: View {
                         }
                     }
                     if hasMembers {
-                        relationChipsRow(terms: word.familyMembers)
+                        relationChipsRow(items: word.familyMembers.map {
+                            (term: $0, origin: word.familySource(for: $0))
+                        })
                     }
                 }
             }
         }
     }
 
-    private func relationChipsRow(terms: [String]) -> some View {
+    private func sortedItems(_ relations: [WordRelation]) -> [(term: String, origin: RelationSource)] {
+        relations
+            .map { (term: $0.targetTerm, origin: $0.origin) }
+            .sorted { ($0.origin == .verified ? 0 : 1) < ($1.origin == .verified ? 0 : 1) }
+    }
+
+    private func relationChipsRow(items: [(term: String, origin: RelationSource)]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(terms, id: \.self) { term in
+                ForEach(items, id: \.term) { item in
                     Button {
-                        handleTermTap(term)
+                        handleTermTap(item.term)
                     } label: {
-                        Text(term)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                            .overlay(
-                                Capsule().stroke(termExists(term) ? Color.accentColor.opacity(0.4) : .clear, lineWidth: 1)
+                        HStack(spacing: 4) {
+                            Text(item.term)
+                                .font(.caption.weight(.medium))
+                            Image(systemName: item.origin.symbol)
+                                .font(.caption2)
+                                .foregroundStyle(item.origin == .verified ? .green : .orange)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                        .overlay(
+                            Capsule().stroke(
+                                item.origin == .verified
+                                    ? Color.green.opacity(0.5)
+                                    : (termExists(item.term)
+                                       ? Color.accentColor.opacity(0.4)
+                                       : Color.orange.opacity(0.35)),
+                                style: StrokeStyle(
+                                    lineWidth: 1,
+                                    dash: item.origin == .verified ? [] : [3, 2]
+                                )
                             )
-                            .foregroundStyle(termExists(term) ? Color.accentColor : Color.primary)
+                        )
+                        .foregroundStyle(termExists(item.term) ? Color.accentColor : Color.primary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -431,25 +455,13 @@ struct WordDetailView: View {
             card.word = newWord
             newWord.card = card
             context.insert(newWord)
-            applyRelations(to: newWord, from: result)
+            await verifier.applyVerifiedRelations(to: newWord, from: result)
             try context.save()
             pendingAddTerm = nil
             if openAfterAdd { navigationTerm = normalized }
         } catch {
             self.error = error.localizedDescription
             pendingAddTerm = nil
-        }
-    }
-
-    private func applyRelations(to target: Word, from result: WordAnalysis) {
-        for term in result.synonyms where !term.isEmpty {
-            target.relations.append(WordRelation(kind: .synonym, targetTerm: term, source: target))
-        }
-        for term in result.antonyms where !term.isEmpty {
-            target.relations.append(WordRelation(kind: .antonym, targetTerm: term, source: target))
-        }
-        for term in result.related where !term.isEmpty {
-            target.relations.append(WordRelation(kind: .related, targetTerm: term, source: target))
         }
     }
 
@@ -530,8 +542,7 @@ struct WordDetailView: View {
                 for relation in word.relations {
                     context.delete(relation)
                 }
-                word.relations.removeAll()
-                applyRelations(to: word, from: result)
+                await verifier.applyVerifiedRelations(to: word, from: result)
 
                 try context.save()
             } catch {

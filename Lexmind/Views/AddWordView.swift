@@ -12,8 +12,10 @@ struct AddWordView: View {
 
     @State private var term: String = ""
     @State private var analyzer = WordAnalyzer()
+    @State private var verifier = RelationVerifier()
     @State private var analysis: WordAnalysis?
     @State private var isAnalyzing = false
+    @State private var isSaving = false
     @State private var errorMessage: String?
 
     @State private var partOfSpeech = ""
@@ -119,8 +121,10 @@ struct AddWordView: View {
                     Button("Vazgeç") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Kaydet", action: save)
-                        .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Kaydet") {
+                        Task { await save() }
+                    }
+                    .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -169,9 +173,13 @@ struct AddWordView: View {
         relatedWords = a.related.map { $0.lowercased() }
     }
 
-    private func save() {
+    private func save() async {
+        guard !isSaving else { return }
         let cleanedTerm = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !cleanedTerm.isEmpty else { return }
+
+        isSaving = true
+        defer { isSaving = false }
 
         let filteredExamples = examples
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -202,15 +210,15 @@ struct AddWordView: View {
         word.card = card
         context.insert(word)
 
-        for term in synonyms where !term.isEmpty {
-            word.relations.append(WordRelation(kind: .synonym, targetTerm: term, source: word))
-        }
-        for term in antonyms where !term.isEmpty {
-            word.relations.append(WordRelation(kind: .antonym, targetTerm: term, source: word))
-        }
-        for term in relatedWords where !term.isEmpty {
-            word.relations.append(WordRelation(kind: .related, targetTerm: term, source: word))
-        }
+        await verifier.applyVerifiedRelations(
+            to: word,
+            term: cleanedTerm,
+            synonyms: synonyms,
+            antonyms: antonyms,
+            related: relatedWords,
+            familyMembers: familyMembers,
+            familyRoot: trimmedRoot.isEmpty ? nil : trimmedRoot
+        )
 
         do {
             try context.save()

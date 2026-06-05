@@ -118,6 +118,18 @@ enum RelationKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum RelationSource: String, Codable {
+    case verified
+    case ai
+
+    var symbol: String {
+        switch self {
+        case .verified: return "checkmark.seal.fill"
+        case .ai:       return "sparkle"
+        }
+    }
+}
+
 enum ReviewRating: Int, Codable, CaseIterable {
     case again = 1
     case hard = 2
@@ -157,6 +169,7 @@ final class Word {
     var topicsRaw: [String]
     var familyRoot: String?
     var familyMembersRaw: [String] = []
+    var familyMembersVerifiedRaw: [String] = []
     var inflectionExamplesRaw: [String] = []
     var createdAt: Date
     var lastStudiedAt: Date?
@@ -183,6 +196,10 @@ final class Word {
     var familyMembers: [String] {
         get { familyMembersRaw }
         set { familyMembersRaw = newValue.map { $0.lowercased() } }
+    }
+
+    func familySource(for member: String) -> RelationSource {
+        familyMembersVerifiedRaw.contains(member.lowercased()) ? .verified : .ai
     }
 
     var inflectionExamples: [String] {
@@ -227,6 +244,7 @@ final class Word {
 final class WordRelation {
     var kindRaw: String
     var targetTerm: String
+    var sourceRaw: String?
     var source: Word?
     var target: Word?
     var createdAt: Date
@@ -236,9 +254,19 @@ final class WordRelation {
         set { kindRaw = newValue.rawValue }
     }
 
-    init(kind: RelationKind, targetTerm: String, source: Word? = nil, target: Word? = nil) {
+    var origin: RelationSource {
+        get { sourceRaw.flatMap(RelationSource.init) ?? .ai }
+        set { sourceRaw = newValue.rawValue }
+    }
+
+    init(kind: RelationKind,
+         targetTerm: String,
+         origin: RelationSource = .ai,
+         source: Word? = nil,
+         target: Word? = nil) {
         self.kindRaw = kind.rawValue
         self.targetTerm = targetTerm.lowercased()
+        self.sourceRaw = origin.rawValue
         self.source = source
         self.target = target
         self.createdAt = .now
