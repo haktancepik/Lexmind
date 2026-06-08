@@ -6,11 +6,40 @@
 import SwiftUI
 import SwiftData
 
+enum LibrarySource: String, CaseIterable, Identifiable {
+    case common
+    case oxford
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .common: return "Hazır"
+        case .oxford: return "Oxford 5000"
+        }
+    }
+
+    var all: [CommonWord] {
+        switch self {
+        case .common: return CommonWordsLibrary.all
+        case .oxford: return OxfordWordsLibrary.all
+        }
+    }
+
+    func filtered(level: CEFRLevel?, topic: WordTopic?) -> [CommonWord] {
+        switch self {
+        case .common: return CommonWordsLibrary.filtered(level: level, topic: topic)
+        case .oxford: return OxfordWordsLibrary.filtered(level: level, topic: topic)
+        }
+    }
+}
+
 struct LibraryImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var existingWords: [Word]
 
+    @State private var source: LibrarySource = .common
     @State private var searchText = ""
     @State private var importedCount: Int = 0
     @State private var showResult = false
@@ -24,7 +53,7 @@ struct LibraryImportView: View {
     }
 
     private var filtered: [CommonWord] {
-        var base = CommonWordsLibrary.filtered(level: levelFilter, topic: topicFilter)
+        var base = source.filtered(level: levelFilter, topic: topicFilter)
         if !searchText.isEmpty {
             base = base.filter {
                 $0.term.localizedCaseInsensitiveContains(searchText) ||
@@ -36,16 +65,26 @@ struct LibraryImportView: View {
     }
 
     private var newWordsCount: Int {
-        CommonWordsLibrary.all.filter { !existingTerms.contains($0.term.lowercased()) }.count
+        source.all.filter { !existingTerms.contains($0.term.lowercased()) }.count
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    Picker("Kaynak", selection: $source) {
+                        ForEach(LibrarySource.allCases) { src in
+                            Text(src.label).tag(src)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                }
+
+                Section {
                     summaryRow
                 } footer: {
-                    Text("Kütüphanedeki kelimeler örnek cümleleriyle birlikte hazır gelir. İstediklerini seç veya tümünü ekle.")
+                    Text(sourceFooter)
                 }
 
                 Section {
@@ -167,17 +206,28 @@ struct LibraryImportView: View {
         }
     }
 
+    private var sourceFooter: String {
+        switch source {
+        case .common:
+            return "Kütüphanedeki kelimeler örnek cümleleriyle birlikte hazır gelir. İstediklerini seç veya tümünü ekle."
+        case .oxford:
+            return "Oxford 5000 ileri seviye listesi (B2–C1). Tanım ve örnekler önceden hazırlanmıştır."
+        }
+    }
+
     private var summaryRow: some View {
-        HStack(spacing: 14) {
+        let total = source.all.count
+        let alreadyIn = existingTerms.intersection(Set(source.all.map { $0.term.lowercased() })).count
+        return HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(CommonWordsLibrary.all.count) hazır kelime")
+                Text("\(total) \(source == .oxford ? "Oxford" : "hazır") kelime")
                     .font(.headline)
-                Text("\(existingTerms.intersection(Set(CommonWordsLibrary.all.map { $0.term.lowercased() })).count) zaten ekli")
+                Text("\(alreadyIn) zaten ekli")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "books.vertical.fill")
+            Image(systemName: source == .oxford ? "graduationcap.fill" : "books.vertical.fill")
                 .font(.title)
                 .foregroundStyle(.tint)
         }
@@ -201,9 +251,16 @@ struct LibraryImportView: View {
                         .background(.tertiary, in: Capsule())
                     Spacer()
                 }
-                Text(word.turkishMeaning)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if word.turkishMeaning.isEmpty {
+                    Text("Tanım ilk açışta cihazda dolar")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .italic()
+                } else {
+                    Text(word.turkishMeaning)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 if !word.ipa.isEmpty {
                     Text(word.ipa)
                         .font(.caption.monospaced())

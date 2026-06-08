@@ -55,6 +55,9 @@ struct WordDetailView: View {
         .task(id: allWords.count) {
             existingTerms = Set(allWords.map { $0.term })
         }
+        .task(id: word.term) {
+            await lazyEnrichIfNeeded()
+        }
         .popover(
             item: Binding(
                 get: { activePopoverTerm.map(LookupTerm.init) },
@@ -519,6 +522,42 @@ struct WordDetailView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)
         )
+    }
+
+    private func lazyEnrichIfNeeded() async {
+        guard word.definition.isEmpty,
+              word.turkishMeaning.isEmpty,
+              !isRegenerating,
+              analyzer.isAvailable else { return }
+        isRegenerating = true
+        defer { isRegenerating = false }
+        let preservedLevel = word.level
+        let preservedTopics = word.topics
+        do {
+            let result = try await analyzer.analyze(term: word.term)
+            word.partOfSpeech = result.partOfSpeech
+            word.ipa = WordAnalyzer.sanitizeIPA(result.ipa)
+            word.countability = result.countability
+            word.definition = result.definition
+            word.turkishMeaning = result.turkishMeaning
+            word.examples = result.examples
+            if preservedLevel == nil,
+               let lv = CEFRLevel(rawValue: result.cefrLevel.uppercased()) {
+                word.level = lv
+            }
+            let onlyGeneric = preservedTopics.isEmpty || preservedTopics == [.general]
+            if onlyGeneric {
+                let parsed = result.topics.compactMap { WordTopic(rawValue: $0.lowercased()) }
+                if !parsed.isEmpty { word.topics = parsed }
+            }
+            word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
+            word.familyMembers = result.familyMembers.map { $0.lowercased() }
+            word.inflectionExamples = result.inflectionExamples
+            await verifier.applyVerifiedRelations(to: word, from: result)
+            try? context.save()
+        } catch {
+            // Silent fail — stub stays, user can tap Regenerate or come back later.
+        }
     }
 
     private func regenerate() {
