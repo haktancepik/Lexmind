@@ -17,7 +17,8 @@ struct LexmindApp: App {
             FSRSCard.self,
             ReviewLog.self,
             DailyGoal.self,
-            WordRelation.self
+            WordRelation.self,
+            DailyReadingPassage.self
         ])
     }
 }

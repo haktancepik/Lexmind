@@ -364,3 +364,34 @@ final class DailyGoal {
         self.reviewsPerDay = reviewsPerDay
     }
 }
+
+@Model
+final class DailyReadingPassage {
+    @Attribute(.unique) var id: UUID
+    var date: Date
+    var title: String
+    var passageText: String
+    var cefrLevel: String
+    var wordTermsRaw: [String]
+    var createdAt: Date
+
+    var wordTerms: [String] {
+        get { wordTermsRaw }
+        set { wordTermsRaw = newValue.map { $0.lowercased() } }
+    }
+
+    init(date: Date,
+         title: String,
+         passageText: String,
+         cefrLevel: String,
+         wordTerms: [String],
+         createdAt: Date = .now) {
+        self.id = UUID()
+        self.date = Calendar.current.startOfDay(for: date)
+        self.title = title
+        self.passageText = passageText
+        self.cefrLevel = cefrLevel
+        self.wordTermsRaw = wordTerms.map { $0.lowercased() }
+        self.createdAt = createdAt
+    }
+}

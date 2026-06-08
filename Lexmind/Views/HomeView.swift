@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var showAddWord = false
     @State private var showStudy = false
     @State private var showLibrary = false
+    @State private var showReading = false
 
     private var goal: DailyGoal {
         goals.first ?? DailyGoal()
@@ -57,6 +58,9 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     heroCard
+                    if reviewedTodayCount > 0 {
+                        readingCard
+                    }
                     statsRow
                     quickActions
                     if !nextDueWords.isEmpty {
@@ -92,7 +96,14 @@ struct HomeView: View {
                 LibraryImportView()
             }
             .fullScreenCover(isPresented: $showStudy) {
-                StudyView()
+                StudyView(onRequestReading: {
+                    showReading = true
+                })
+            }
+            .sheet(isPresented: $showReading) {
+                NavigationStack {
+                    ReadingPassageView()
+                }
             }
         }
     }
@@ -152,6 +163,47 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.regularMaterial)
         )
+    }
+
+    private var readingCard: some View {
+        NavigationLink {
+            ReadingPassageView()
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "book.pages.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        LinearGradient(colors: [.purple, .pink],
+                                       startPoint: .topLeading,
+                                       endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bugünün Okuma Metni")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                    Text("Bugün çalıştığın \(reviewedTodayCount) tekrar üzerinden bağlamlı bir metin.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 6)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var statsRow: some View {

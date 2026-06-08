@@ -45,8 +45,8 @@ final class QuickLookupService {
             switch self {
             case .existing(let w): return w.ipa
             case .common(let c): return c.ipa
-            case .ai(let a): return a.ipa
-            case .partialAI(let p): return p.ipa ?? ""
+            case .ai(let a): return WordAnalyzer.sanitizeIPA(a.ipa)
+            case .partialAI(let p): return WordAnalyzer.sanitizeIPA(p.ipa ?? "")
             }
         }
 

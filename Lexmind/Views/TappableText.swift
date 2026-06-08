@@ -9,6 +9,7 @@ import UIKit
 struct TappableText: UIViewRepresentable {
     let text: String
     let highlightedTerm: String?
+    var highlightedTerms: Set<String> = []
     var textStyle: UIFont.TextStyle = .body
     var baseColor: UIColor = .label
     let onTokenTap: (String) -> Void
@@ -53,10 +54,11 @@ struct TappableText: UIViewRepresentable {
             location += length
 
             if case .word(let normalized) = token.kind {
-                if normalized == highlighted {
+                if normalized == highlighted || highlightedTerms.contains(normalized) {
                     let bold = UIFont.systemFont(ofSize: font.pointSize, weight: .bold)
                     attr.addAttribute(.font, value: bold, range: range)
                     attr.addAttribute(.foregroundColor, value: UIColor.tintColor, range: range)
+                    attr.addAttribute(.lexmindTerm, value: normalized, range: range)
                 } else if Tokenizer.stopWords.contains(normalized) {
                     attr.addAttribute(.foregroundColor,
                                       value: baseColor.withAlphaComponent(0.55),

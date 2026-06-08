@@ -446,7 +446,7 @@ struct WordDetailView: View {
             let newWord = Word(
                 term: normalized,
                 partOfSpeech: result.partOfSpeech,
-                ipa: result.ipa,
+                ipa: WordAnalyzer.sanitizeIPA(result.ipa),
                 countability: result.countability,
                 definition: result.definition,
                 turkishMeaning: result.turkishMeaning,
@@ -529,7 +529,7 @@ struct WordDetailView: View {
             do {
                 let result = try await analyzer.analyze(term: word.term)
                 word.partOfSpeech = result.partOfSpeech
-                word.ipa = result.ipa
+                word.ipa = WordAnalyzer.sanitizeIPA(result.ipa)
                 word.countability = result.countability
                 word.definition = result.definition
                 word.turkishMeaning = result.turkishMeaning

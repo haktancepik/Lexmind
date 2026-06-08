@@ -149,7 +149,7 @@ struct AddWordView: View {
 
     private func applyAnalysis(_ a: WordAnalysis) {
         partOfSpeech = a.partOfSpeech
-        ipa = a.ipa
+        ipa = WordAnalyzer.sanitizeIPA(a.ipa)
         countability = a.countability
         definition = a.definition
         turkishMeaning = a.turkishMeaning

@@ -11,7 +11,7 @@ struct WordAnalysis: Equatable {
     @Guide(description: "The English part of speech, e.g. noun, verb, adjective, adverb")
     var partOfSpeech: String
 
-    @Guide(description: "IPA pronunciation enclosed in slashes, e.g. /ˈhɛloʊ/")
+    @Guide(description: "EXACTLY ONE IPA pronunciation in /slashes/ for the exact word form requested (e.g. for 'running' use /ˈrʌnɪŋ/, NOT /rʌn/). Never duplicate, never list alternatives, never include the root form.")
     var ipa: String
 
     @Guide(description: "Countability: countable, uncountable, both, or N/A if not a noun")
@@ -56,7 +56,7 @@ struct QuickWordAnalysis: Equatable {
     @Guide(description: "English part of speech, single word (noun/verb/adjective/...)")
     var partOfSpeech: String
 
-    @Guide(description: "IPA pronunciation in slashes, e.g. /ˈhɛloʊ/")
+    @Guide(description: "EXACTLY ONE IPA pronunciation in /slashes/ for the exact word form requested (e.g. for 'running' use /ˈrʌnɪŋ/, NOT /rʌn/). Never duplicate, never list alternatives, never include the root form.")
     var ipa: String
 
     @Guide(description: "Concise English definition")
@@ -119,7 +119,7 @@ final class WordAnalyzer {
         let session = LanguageModelSession {
             "You are an English vocabulary tutor for Turkish learners."
             "Given an English word, produce a precise linguistic analysis."
-            "Always return the IPA in /slashes/."
+            "IPA rules: return EXACTLY ONE pronunciation in /slashes/ for the EXACT word form requested. For an inflected form like 'running', the IPA must be /ˈrʌnɪŋ/, never /rʌn/. Never duplicate the IPA, never repeat it, never list alternatives, never include more than one pair of slashes."
             "Part of speech must be a single English word (noun/verb/adjective/adverb/preposition/etc.)."
             "Countability applies only to nouns; for non-nouns return N/A."
             "The five 'examples' should use the base form naturally; do not force varied inflections there."
@@ -139,6 +139,28 @@ final class WordAnalyzer {
         }
     }
 
+    /// Extracts a single clean `/.../` IPA segment from a possibly-noisy AI string
+    /// (handles duplicates like "/ˈrʌnɪŋ//ˈrʌnɪŋ/" or paired root+inflected forms).
+    /// Returns the LAST unique segment, which is usually the requested form.
+    static func sanitizeIPA(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        guard let regex = try? NSRegularExpression(pattern: #"/[^/]+/"#) else {
+            return trimmed
+        }
+        let nsRange = NSRange(trimmed.startIndex..., in: trimmed)
+        let matches = regex.matches(in: trimmed, range: nsRange)
+        guard !matches.isEmpty else { return trimmed }
+        var seen: [String] = []
+        for m in matches {
+            if let r = Range(m.range, in: trimmed) {
+                let seg = String(trimmed[r])
+                if !seen.contains(seg) { seen.append(seg) }
+            }
+        }
+        return seen.last ?? trimmed
+    }
+
     func streamQuick(term: String) -> AsyncThrowingStream<QuickWordAnalysis.PartiallyGenerated, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -149,7 +171,7 @@ final class WordAnalyzer {
                 let session = LanguageModelSession {
                     "You are an English vocabulary tutor for Turkish learners."
                     "Given an English word, produce a compact analysis suitable for a quick-look popover."
-                    "Always return IPA in /slashes/."
+                    "IPA rules: return EXACTLY ONE pronunciation in /slashes/ for the EXACT word form requested. For an inflected form like 'running', the IPA must be /ˈrʌnɪŋ/, never /rʌn/. Never duplicate the IPA, never repeat it, never list alternatives, never include more than one pair of slashes."
                     "Part of speech must be a single English word (noun/verb/adjective/adverb/preposition/etc.)."
                     "Turkish meaning must be a short, idiomatic Turkish translation — single phrase, no parentheses."
                     "Family: if the word is the root, return empty familyRoot. Members must be real derived forms."

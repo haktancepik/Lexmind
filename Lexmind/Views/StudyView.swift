@@ -7,6 +7,8 @@ import SwiftUI
 import SwiftData
 
 struct StudyView: View {
+    var onRequestReading: (() -> Void)? = nil
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var words: [Word]
@@ -96,6 +98,21 @@ struct StudyView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+
+            if sessionReviewed > 0, onRequestReading != nil {
+                Button {
+                    let action = onRequestReading
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        action?()
+                    }
+                } label: {
+                    Label("Okuma Metni Oluştur", systemImage: "book.pages")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+
             Button("Bitir") { dismiss() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -364,7 +381,7 @@ struct StudyView: View {
             let newWord = Word(
                 term: normalized,
                 partOfSpeech: result.partOfSpeech,
-                ipa: result.ipa,
+                ipa: WordAnalyzer.sanitizeIPA(result.ipa),
                 countability: result.countability,
                 definition: result.definition,
                 turkishMeaning: result.turkishMeaning,
