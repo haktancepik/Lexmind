@@ -65,6 +65,12 @@ final class RelationVerifier {
 
     private func verifyFamilyMembers(_ members: [String], root: String) async -> [String] {
         guard !root.isEmpty, !members.isEmpty else { return [] }
+
+        let tagger = NLTagger(tagSchemes: [.lemma])
+        let lemmaRoot = lemma(of: root, tagger: tagger)
+        let prefixLen = min(3, root.count)
+        let rootPrefix = String(root.prefix(prefixLen))
+
         var verified: [String] = []
         await withTaskGroup(of: (String, Bool).self) { group in
             for m in members {
@@ -74,7 +80,7 @@ final class RelationVerifier {
                 }
             }
             for await (m, exists) in group where exists {
-                if sharesFamily(m, root: root) {
+                if sharesFamily(m, rootPrefix: rootPrefix, lemmaRoot: lemmaRoot, tagger: tagger) {
                     verified.append(m)
                 }
             }
@@ -82,17 +88,17 @@ final class RelationVerifier {
         return verified
     }
 
-    private func sharesFamily(_ member: String, root: String) -> Bool {
-        let lemmaMember = lemma(of: member)
-        let lemmaRoot = lemma(of: root)
+    private func sharesFamily(_ member: String,
+                              rootPrefix: String,
+                              lemmaRoot: String,
+                              tagger: NLTagger) -> Bool {
+        let lemmaMember = lemma(of: member, tagger: tagger)
         if !lemmaMember.isEmpty, lemmaMember == lemmaRoot { return true }
-        let prefixLength = min(3, root.count)
-        guard prefixLength > 0 else { return false }
-        return member.hasPrefix(String(root.prefix(prefixLength)))
+        guard !rootPrefix.isEmpty else { return false }
+        return member.hasPrefix(rootPrefix)
     }
 
-    private func lemma(of term: String) -> String {
-        let tagger = NLTagger(tagSchemes: [.lemma])
+    private func lemma(of term: String, tagger: NLTagger) -> String {
         tagger.string = term
         var result = ""
         tagger.enumerateTags(in: term.startIndex..<term.endIndex,

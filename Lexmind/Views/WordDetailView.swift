@@ -25,6 +25,7 @@ struct WordDetailView: View {
     @State private var isAddingFromPopover = false
     @State private var recentlyAddedTerm: String? = nil
     @State private var toastTask: Task<Void, Never>?
+    @State private var existingTerms: Set<String> = []
 
     var body: some View {
         ScrollView {
@@ -50,6 +51,9 @@ struct WordDetailView: View {
             if lookup == nil {
                 lookup = QuickLookupService(analyzer: analyzer)
             }
+        }
+        .task(id: allWords.count) {
+            existingTerms = Set(allWords.map { $0.term })
         }
         .popover(
             item: Binding(
@@ -350,8 +354,10 @@ struct WordDetailView: View {
                         }
                     }
                     if hasMembers {
+                        let verifiedSet = Set(word.familyMembersVerifiedRaw)
                         relationChipsRow(items: word.familyMembers.map {
-                            (term: $0, origin: word.familySource(for: $0))
+                            (term: $0,
+                             origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
                         })
                     }
                 }
@@ -403,7 +409,7 @@ struct WordDetailView: View {
     }
 
     private func termExists(_ term: String) -> Bool {
-        allWords.contains(where: { $0.term == term.lowercased() })
+        existingTerms.contains(term.lowercased())
     }
 
     private func handleTermTap(_ term: String) {

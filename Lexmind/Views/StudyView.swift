@@ -26,6 +26,7 @@ struct StudyView: View {
     @State private var recentlyAddedTerm: String?
     @State private var toastTask: Task<Void, Never>?
     @State private var popoverError: String?
+    @State private var existingTerms: Set<String> = []
 
     private let scheduler = FSRSScheduler()
 
@@ -63,6 +64,9 @@ struct StudyView: View {
                 if lookup == nil {
                     lookup = QuickLookupService(analyzer: analyzer)
                 }
+            }
+            .task(id: words.count) {
+                existingTerms = Set(words.map { $0.term })
             }
             .overlay(alignment: .top) { addedToast }
             .popover(
@@ -230,8 +234,10 @@ struct StudyView: View {
                     }
                 }
                 if hasMembers {
+                    let verifiedSet = Set(word.familyMembersVerifiedRaw)
                     relationChipsRow(items: word.familyMembers.map {
-                        (term: $0, origin: word.familySource(for: $0))
+                        (term: $0,
+                         origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
                     })
                 }
             }
@@ -339,7 +345,7 @@ struct StudyView: View {
     }
 
     private func termExists(_ term: String) -> Bool {
-        words.contains(where: { $0.term == term.lowercased() })
+        existingTerms.contains(term.lowercased())
     }
 
     private func addFromPopover(_ term: String) async {

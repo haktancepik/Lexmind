@@ -32,6 +32,14 @@ enum CommonWordsLibrary {
         }
     }
 
+    static let byTerm: [String: CommonWord] = {
+        Dictionary(uniqueKeysWithValues: all.map { ($0.term, $0) })
+    }()
+
+    static func find(_ term: String) -> CommonWord? {
+        byTerm[term.lowercased()]
+    }
+
     static let all: [CommonWord] = [
 
         // MARK: - A1

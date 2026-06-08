@@ -12,12 +12,14 @@ final class QuickLookupService {
         case existing(Word)
         case common(CommonWord)
         case ai(WordAnalysis)
+        case partialAI(QuickWordAnalysis.PartiallyGenerated)
 
         var turkishMeaning: String {
             switch self {
             case .existing(let w): return w.turkishMeaning
             case .common(let c): return c.turkishMeaning
             case .ai(let a): return a.turkishMeaning
+            case .partialAI(let p): return p.turkishMeaning ?? ""
             }
         }
 
@@ -26,6 +28,7 @@ final class QuickLookupService {
             case .existing(let w): return w.definition
             case .common(let c): return c.definition
             case .ai(let a): return a.definition
+            case .partialAI(let p): return p.definition ?? ""
             }
         }
 
@@ -34,6 +37,7 @@ final class QuickLookupService {
             case .existing(let w): return w.partOfSpeech
             case .common(let c): return c.partOfSpeech
             case .ai(let a): return a.partOfSpeech
+            case .partialAI(let p): return p.partOfSpeech ?? ""
             }
         }
 
@@ -42,6 +46,7 @@ final class QuickLookupService {
             case .existing(let w): return w.ipa
             case .common(let c): return c.ipa
             case .ai(let a): return a.ipa
+            case .partialAI(let p): return p.ipa ?? ""
             }
         }
 
@@ -50,6 +55,7 @@ final class QuickLookupService {
             case .existing(let w): return w.familyRoot ?? ""
             case .common: return ""
             case .ai(let a): return a.familyRoot
+            case .partialAI(let p): return p.familyRoot ?? ""
             }
         }
 
@@ -58,6 +64,7 @@ final class QuickLookupService {
             case .existing(let w): return w.familyMembers
             case .common: return []
             case .ai(let a): return a.familyMembers
+            case .partialAI(let p): return (p.familyMembers ?? []).compactMap { $0 }
             }
         }
 
@@ -66,6 +73,7 @@ final class QuickLookupService {
             case .existing(let w): return w.inflectionExamples
             case .common: return []
             case .ai(let a): return a.inflectionExamples
+            case .partialAI(let p): return (p.inflectionExamples ?? []).compactMap { $0 }
             }
         }
     }
@@ -122,7 +130,7 @@ final class QuickLookupService {
             return true
         }
 
-        if let common = CommonWordsLibrary.all.first(where: { $0.term == key }) {
+        if let common = CommonWordsLibrary.find(key) {
             let result: LookupResult = .common(common)
             cache[key] = result
             phase = .ready(term: key, result: result)
@@ -139,11 +147,14 @@ final class QuickLookupService {
         let requestID = currentRequestID
 
         do {
-            let analysis = try await analyzer.analyze(term: key)
+            for try await partial in analyzer.streamQuick(term: key) {
+                guard requestID == currentRequestID else { return }
+                phase = .ready(term: key, result: .partialAI(partial))
+            }
             guard requestID == currentRequestID else { return }
-            let result: LookupResult = .ai(analysis)
-            cache[key] = result
-            phase = .ready(term: key, result: result)
+            if case .ready(_, let final) = phase {
+                cache[key] = final
+            }
         } catch {
             guard requestID == currentRequestID else { return }
             phase = .failed(term: key, message: error.localizedDescription)

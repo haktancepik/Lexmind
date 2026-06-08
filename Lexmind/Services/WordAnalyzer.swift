@@ -51,6 +51,30 @@ struct WordAnalysis: Equatable {
     var inflectionExamples: [String]
 }
 
+@Generable(description: "Compact analysis used for the quick-lookup popover")
+struct QuickWordAnalysis: Equatable {
+    @Guide(description: "English part of speech, single word (noun/verb/adjective/...)")
+    var partOfSpeech: String
+
+    @Guide(description: "IPA pronunciation in slashes, e.g. /ˈhɛloʊ/")
+    var ipa: String
+
+    @Guide(description: "Concise English definition")
+    var definition: String
+
+    @Guide(description: "Short idiomatic Turkish translation")
+    var turkishMeaning: String
+
+    @Guide(description: "Canonical root form, empty if the word IS the root or has no family")
+    var familyRoot: String
+
+    @Guide(description: "Up to 4 derived forms in the same family. Empty array if none.", .count(0...4))
+    var familyMembers: [String]
+
+    @Guide(description: "Two short example sentences. Each MUST use a different inflected/derived form (e.g. past tense, gerund, noun derivation).", .count(2))
+    var inflectionExamples: [String]
+}
+
 enum WordAnalyzerError: LocalizedError {
     case modelUnavailable(String)
     case generationFailed(String)
@@ -112,6 +136,39 @@ final class WordAnalyzer {
             return response.content
         } catch {
             throw WordAnalyzerError.generationFailed(error.localizedDescription)
+        }
+    }
+
+    func streamQuick(term: String) -> AsyncThrowingStream<QuickWordAnalysis.PartiallyGenerated, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                guard isAvailable else {
+                    continuation.finish(throwing: WordAnalyzerError.modelUnavailable(availabilityMessage ?? "bilinmeyen sebep"))
+                    return
+                }
+                let session = LanguageModelSession {
+                    "You are an English vocabulary tutor for Turkish learners."
+                    "Given an English word, produce a compact analysis suitable for a quick-look popover."
+                    "Always return IPA in /slashes/."
+                    "Part of speech must be a single English word (noun/verb/adjective/adverb/preposition/etc.)."
+                    "Turkish meaning must be a short, idiomatic Turkish translation — single phrase, no parentheses."
+                    "Family: if the word is the root, return empty familyRoot. Members must be real derived forms."
+                    "Each inflectionExample must use a DIFFERENT family member; never repeat the same form."
+                }
+                do {
+                    let stream = session.streamResponse(
+                        to: "Analyze the English word: \"\(term)\"",
+                        generating: QuickWordAnalysis.self
+                    )
+                    for try await snapshot in stream {
+                        continuation.yield(snapshot.content)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: WordAnalyzerError.generationFailed(error.localizedDescription))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
         }
     }
 }
