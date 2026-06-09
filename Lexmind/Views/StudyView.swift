@@ -137,6 +137,28 @@ struct StudyView: View {
 
             controls(for: word)
         }
+        .task(id: word.term) {
+            await enrichFamilyIfNeeded(for: word)
+        }
+    }
+
+    private func enrichFamilyIfNeeded(for word: Word) async {
+        guard analyzer.isAvailable else { return }
+        let needsFamily = word.familyRoot == nil
+            && word.familyMembers.isEmpty
+            && word.relations.isEmpty
+        guard needsFamily else { return }
+        do {
+            let result = try await analyzer.analyze(term: word.term)
+            try Task.checkCancellation()
+            word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
+            word.familyMembers = result.familyMembers.map { $0.lowercased() }
+            word.inflectionExamples = result.inflectionExamples
+            await verifier.applyVerifiedRelations(to: word, from: result)
+            try? context.save()
+        } catch {
+            // Silent — bir sonraki kart açılışında tekrar denenir.
+        }
     }
 
     private var progressBar: some View {
