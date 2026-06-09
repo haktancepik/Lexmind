@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
 """
+DEPRECATED — use scripts/enrich_full.py instead.
+
+enrich_full.py is a superset: it produces the same definition / IPA /
+turkishMeaning / examples / topics fields AS WELL AS familyRoot,
+familyMembers, inflectionExamples, synonyms, antonyms, related (each
+with a Datamuse-verified flag). The new pipeline is also generic over
+the starter file (supports common_starter.json and any other source).
+
+This file is kept only for historical reference and will be removed
+after the new pipeline is verified end-to-end. Do not use for new
+runs.
+
+Equivalent enrich_full.py command:
+    python3 scripts/enrich_full.py submit  --starter scripts/oxford5000_starter.json
+    python3 scripts/enrich_full.py poll    --starter scripts/oxford5000_starter.json
+    python3 scripts/enrich_full.py verify  --starter scripts/oxford5000_starter.json
+
+---
+
 oxford5000_starter.json -> oxford5000.json
 
 Enriches each (term, partOfSpeech, level) entry with definition,
