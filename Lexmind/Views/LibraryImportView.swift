@@ -432,7 +432,10 @@ struct LibraryImportView: View {
         }
 
         let payload = candidates.map { cw in
-            LibraryImporter.ImportableWord(
+            let mapRel: ([LibraryRelation]) -> [LibraryImporter.ImportableWord.Relation] = { items in
+                items.map { .init(term: $0.term, verified: $0.verified) }
+            }
+            return LibraryImporter.ImportableWord(
                 term: cw.term.lowercased(),
                 partOfSpeech: cw.partOfSpeech,
                 ipa: cw.ipa,
@@ -441,7 +444,14 @@ struct LibraryImportView: View {
                 turkishMeaning: cw.turkishMeaning,
                 examples: cw.examples,
                 levelRaw: cw.level.rawValue,
-                topicsRaw: cw.topics.map { $0.rawValue }
+                topicsRaw: cw.topics.map { $0.rawValue },
+                familyRoot: cw.familyRoot,
+                familyMembers: cw.familyMembers,
+                familyMembersVerified: cw.familyMembersVerified,
+                inflectionExamples: cw.inflectionExamples,
+                synonyms: mapRel(cw.synonyms),
+                antonyms: mapRel(cw.antonyms),
+                related: mapRel(cw.related)
             )
         }
 

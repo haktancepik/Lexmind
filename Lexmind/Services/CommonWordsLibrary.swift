@@ -9,6 +9,11 @@
 
 import Foundation
 
+struct LibraryRelation: Hashable {
+    let term: String
+    let verified: Bool
+}
+
 struct CommonWord: Identifiable, Hashable {
     let id = UUID()
     let term: String
@@ -20,6 +25,49 @@ struct CommonWord: Identifiable, Hashable {
     let examples: [String]
     let level: CEFRLevel
     let topics: [WordTopic]
+    let familyRoot: String?
+    let familyMembers: [String]
+    let familyMembersVerified: [String]
+    let inflectionExamples: [String]
+    let synonyms: [LibraryRelation]
+    let antonyms: [LibraryRelation]
+    let related: [LibraryRelation]
+
+    init(
+        term: String,
+        partOfSpeech: String,
+        ipa: String,
+        countability: String,
+        definition: String,
+        turkishMeaning: String,
+        examples: [String],
+        level: CEFRLevel,
+        topics: [WordTopic],
+        familyRoot: String? = nil,
+        familyMembers: [String] = [],
+        familyMembersVerified: [String] = [],
+        inflectionExamples: [String] = [],
+        synonyms: [LibraryRelation] = [],
+        antonyms: [LibraryRelation] = [],
+        related: [LibraryRelation] = []
+    ) {
+        self.term = term
+        self.partOfSpeech = partOfSpeech
+        self.ipa = ipa
+        self.countability = countability
+        self.definition = definition
+        self.turkishMeaning = turkishMeaning
+        self.examples = examples
+        self.level = level
+        self.topics = topics
+        self.familyRoot = familyRoot
+        self.familyMembers = familyMembers
+        self.familyMembersVerified = familyMembersVerified
+        self.inflectionExamples = inflectionExamples
+        self.synonyms = synonyms
+        self.antonyms = antonyms
+        self.related = related
+    }
 }
 
 enum CommonWordsLibrary {

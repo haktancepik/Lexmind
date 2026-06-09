@@ -23,6 +23,18 @@ actor LibraryImporter {
         let examples: [String]
         let levelRaw: String?
         let topicsRaw: [String]
+        let familyRoot: String?
+        let familyMembers: [String]
+        let familyMembersVerified: [String]
+        let inflectionExamples: [String]
+        let synonyms: [Relation]
+        let antonyms: [Relation]
+        let related: [Relation]
+
+        struct Relation: Sendable {
+            let term: String
+            let verified: Bool
+        }
     }
 
     struct ImportResult: Sendable {
@@ -71,13 +83,46 @@ actor LibraryImporter {
                     turkishMeaning: cw.turkishMeaning,
                     examples: cw.examples,
                     level: cw.levelRaw.flatMap(CEFRLevel.init(rawValue:)),
-                    topics: cw.topicsRaw.compactMap(WordTopic.init(rawValue:))
+                    topics: cw.topicsRaw.compactMap(WordTopic.init(rawValue:)),
+                    familyRoot: cw.familyRoot,
+                    familyMembers: cw.familyMembers,
+                    inflectionExamples: cw.inflectionExamples
                 )
+                word.familyMembersVerifiedRaw = cw.familyMembersVerified.map { $0.lowercased() }
                 let card = FSRSCard()
                 word.card = card
                 card.word = word
                 modelContext.insert(word)
                 modelContext.insert(card)
+
+                for rel in cw.synonyms {
+                    let r = WordRelation(
+                        kind: .synonym,
+                        targetTerm: rel.term,
+                        origin: rel.verified ? .verified : .ai,
+                        source: word
+                    )
+                    modelContext.insert(r)
+                }
+                for rel in cw.antonyms {
+                    let r = WordRelation(
+                        kind: .antonym,
+                        targetTerm: rel.term,
+                        origin: rel.verified ? .verified : .ai,
+                        source: word
+                    )
+                    modelContext.insert(r)
+                }
+                for rel in cw.related {
+                    let r = WordRelation(
+                        kind: .related,
+                        targetTerm: rel.term,
+                        origin: rel.verified ? .verified : .ai,
+                        source: word
+                    )
+                    modelContext.insert(r)
+                }
+
                 insertedInBatch += 1
                 lastTerm = cw.term
             }

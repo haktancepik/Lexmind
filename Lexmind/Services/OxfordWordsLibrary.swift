@@ -22,6 +22,18 @@ private struct OxfordWordEntry: Decodable {
     let examples: [String]?
     let level: String
     let topics: [String]?
+    let familyRoot: String?
+    let familyMembers: [String]?
+    let familyMembersVerified: [String]?
+    let inflectionExamples: [String]?
+    let synonyms: [RelationEntry]?
+    let antonyms: [RelationEntry]?
+    let related: [RelationEntry]?
+
+    struct RelationEntry: Decodable {
+        let term: String
+        let verified: Bool
+    }
 }
 
 enum OxfordWordsLibrary {
@@ -74,6 +86,9 @@ enum OxfordWordsLibrary {
         } else {
             topics = [.general]
         }
+        let mapRelations: ([OxfordWordEntry.RelationEntry]?) -> [LibraryRelation] = { items in
+            (items ?? []).map { LibraryRelation(term: $0.term, verified: $0.verified) }
+        }
         return CommonWord(
             term: e.term.lowercased(),
             partOfSpeech: e.partOfSpeech,
@@ -83,7 +98,14 @@ enum OxfordWordsLibrary {
             turkishMeaning: e.turkishMeaning ?? "",
             examples: e.examples ?? [],
             level: level,
-            topics: topics.isEmpty ? [.general] : topics
+            topics: topics.isEmpty ? [.general] : topics,
+            familyRoot: e.familyRoot,
+            familyMembers: e.familyMembers ?? [],
+            familyMembersVerified: e.familyMembersVerified ?? [],
+            inflectionExamples: e.inflectionExamples ?? [],
+            synonyms: mapRelations(e.synonyms),
+            antonyms: mapRelations(e.antonyms),
+            related: mapRelations(e.related)
         )
     }
 }
