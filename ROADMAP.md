@@ -45,10 +45,11 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 ### 1.2 Onboarding + İlk Açılış Akışı
 Şu anda app direkt 4-tab TabView açıyor, boş kelime listesi gösteriyor. Yüksek terk oranı riski.
 
-- [ ] `Views/OnboardingView.swift`: 3-4 ekran (hoşgeldin → CEFR seviye seçimi → günlük hedef → kütüphane import önerisi)
-- [ ] `@AppStorage("hasCompletedOnboarding")` ile RootTabView'da gate
-- [ ] Onboarding sonunda CommonWordsLibrary önerisini doğrudan import flow'una bağla
-- [ ] Boş kelime listesi durumunda HomeView'da "ilk kelimeni ekle" CTA'sı
+- [x] `Views/OnboardingView.swift`: 4 sayfa paged TabView (Welcome → CEFR seviye → günlük hedef Stepper'ları → kütüphane import önerisi) + alt page dots + Devam butonu
+- [x] `@AppStorage("hasCompletedOnboarding")` ile `LexmindApp` seviyesinde gate (false ise OnboardingView, true ise RootTabView)
+- [x] Son sayfa: "Hazır kütüphaneden ekle" → `LibraryImportView` sheet (kapatınca onboarding tamamlanır), veya "Şimdilik atla" → direkt tamamla
+- [x] `preferredCEFRLevel` AppStorage'a yazılıyor (Faz 3'te dil seçimi/filtre için), DailyGoal modeli onboarding'de oluşturulup hedeflerle dolduruluyor
+- [x] `HomeView` boş kelime durumu: yeni `emptyHeroCard` (sparkles + "Hadi başlayalım" + "Hazır Kütüphaneden Ekle" + "Tek Kelime Ekle" CTA'ları); statsRow/upcoming gibi anlamsız 0 göstergeler boş durumda gizlendi
 
 ### 1.3 Performans & Stabilite
 

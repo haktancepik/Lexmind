@@ -8,9 +8,15 @@ import SwiftData
 
 @main
 struct LexmindApp: App {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            if hasCompletedOnboarding {
+                RootTabView()
+            } else {
+                OnboardingView()
+            }
         }
         .modelContainer(for: [
             Word.self,

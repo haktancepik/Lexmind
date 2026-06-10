@@ -57,13 +57,17 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    heroCard
-                    if reviewedTodayCount > 0 {
-                        readingCard
-                    }
-                    statsRow
-                    if !nextDueWords.isEmpty {
-                        upcomingSection
+                    if words.isEmpty {
+                        emptyHeroCard
+                    } else {
+                        heroCard
+                        if reviewedTodayCount > 0 {
+                            readingCard
+                        }
+                        statsRow
+                        if !nextDueWords.isEmpty {
+                            upcomingSection
+                        }
                     }
                 }
                 .padding()
@@ -113,6 +117,47 @@ struct HomeView: View {
             .sorted { ($0.card?.due ?? .now) < ($1.card?.due ?? .now) }
             .prefix(5)
             .map { $0 }
+    }
+
+    private var emptyHeroCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.title)
+                    .foregroundStyle(.purple)
+                Text("Hadi başlayalım")
+                    .font(.title2.bold())
+                Spacer()
+            }
+
+            Text("Henüz kelime eklemedin. İlk kelimelerini ekleyerek FSRS döngüsünü başlat.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+
+            Button {
+                showLibrary = true
+            } label: {
+                Label("Hazır Kütüphaneden Ekle", systemImage: "books.vertical.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.top, 4)
+
+            Button {
+                showAddWord = true
+            } label: {
+                Label("Tek Kelime Ekle", systemImage: "plus.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.regularMaterial)
+        )
     }
 
     private var heroCard: some View {
