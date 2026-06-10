@@ -58,9 +58,9 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [ ] Instruments Time Profiler ile app launch'ta JSON decode süresini ölç — hedef <500ms (manuel adım — kullanıcı tarafında doğrulanacak)
 
 #### 1.3.2 Force Unwrap Temizliği
-- [ ] 120+ `!` operator → `guard let` / `if let` / default value
-- [ ] `Word.card!` gibi optional ilişkilerde explicit nil handling
-- [ ] **Neden kritik:** Reviewer test ederken bir force_cast crash'i = direkt rejection
+- [x] Denetim (2026-06-10): kod tabanında prod kodunda 0 force unwrap, 0 `as!`, 0 `try!`. Roadmap'in başında yapılan "120+" tahmini stale çıktı — son commit'lerle (1.0/1.1/1.2/1.3.5) zaten temizlenmiş. `Word.card!` pattern'i de hiç yok; SwiftData ilişkileri her yerde `if let card = word.card` ile ele alınıyor
+- [x] Tek istisna `PreviewData.swift:13`'teki `try! ModelContainer(...)` — sadece SwiftUI preview'lerinde çalışır, App Store binary'sine girmez, Apple resmi şablonlarında kullanılan konvansiyon. Bırakıldı.
+- [ ] **Neden kritik:** Reviewer test ederken bir force_cast crash'i = direkt rejection (bu risk şu an mevcut değil)
 
 #### 1.3.3 Datamuse Error UX
 - [ ] `DatamuseClient` dönüş tipi `Result<[Suggestion], DatamuseError>`'a geç
