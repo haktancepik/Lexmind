@@ -143,7 +143,7 @@ struct WordsListView: View {
             stateBadge(for: word)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(word.term).font(.headline)
+                    Text(word.displayName).font(.headline)
                     if !word.partOfSpeech.isEmpty {
                         Text(word.partOfSpeech)
                             .font(.caption2)

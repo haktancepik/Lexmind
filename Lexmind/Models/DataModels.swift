@@ -157,7 +157,14 @@ enum ReviewRating: Int, Codable, CaseIterable {
 
 @Model
 final class Word {
+    /// Lookup/storage key — always `trim + lowercased`. Enforced by `init` and
+    /// `Word.normalize(_:)` so the unique constraint actually catches
+    /// "Apple" vs "apple" duplicates.
     @Attribute(.unique) var term: String
+    /// Original-cased, trimmed form of the user's input. `nil` for legacy
+    /// records and library imports where casing is already canonical; views
+    /// fall back to `term` via `displayName`.
+    var displayTerm: String?
     var partOfSpeech: String
     var ipa: String
     var countability: String
@@ -173,6 +180,15 @@ final class Word {
     var inflectionExamplesRaw: [String] = []
     var createdAt: Date
     var lastStudiedAt: Date?
+
+    static func normalize(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    var displayName: String {
+        if let dt = displayTerm, !dt.isEmpty { return dt }
+        return term
+    }
 
     @Relationship(deleteRule: .cascade, inverse: \FSRSCard.word)
     var card: FSRSCard?
@@ -223,7 +239,12 @@ final class Word {
         inflectionExamples: [String] = [],
         createdAt: Date = .now
     ) {
-        self.term = term
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.term = trimmed.lowercased()
+        // Only store a separate display form when the original casing differs
+        // from the canonical (lowercased) key — keeps DB rows tidy for library
+        // imports that already pass lowercase terms.
+        self.displayTerm = (trimmed.isEmpty || trimmed == trimmed.lowercased()) ? nil : trimmed
         self.partOfSpeech = partOfSpeech
         self.ipa = ipa
         self.countability = countability

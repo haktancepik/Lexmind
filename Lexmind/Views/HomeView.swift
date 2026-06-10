@@ -283,7 +283,7 @@ struct HomeView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading) {
-                            Text(word.term).font(.body.bold())
+                            Text(word.displayName).font(.body.bold())
                             Text(word.partOfSpeech)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

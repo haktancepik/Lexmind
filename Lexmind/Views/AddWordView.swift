@@ -224,7 +224,8 @@ struct AddWordView: View {
 
     private func save() async {
         guard !isSaving else { return }
-        let cleanedTerm = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedTerm = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedTerm = trimmedTerm.lowercased()
         guard !cleanedTerm.isEmpty else { return }
 
         isSaving = true
@@ -240,7 +241,7 @@ struct AddWordView: View {
 
         let trimmedRoot = familyRoot.trimmingCharacters(in: .whitespacesAndNewlines)
         let word = Word(
-            term: cleanedTerm,
+            term: trimmedTerm,
             partOfSpeech: partOfSpeech.trimmingCharacters(in: .whitespacesAndNewlines),
             ipa: ipa.trimmingCharacters(in: .whitespacesAndNewlines),
             countability: countability.trimmingCharacters(in: .whitespacesAndNewlines),

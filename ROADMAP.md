@@ -68,8 +68,10 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [x] Timeout sonrası 1 kez retry: `fetchWords(retriesRemaining:)` ilk `URLError.timedOut`'ta otomatik yeniden çağırılıyor; ikinci timeout'ta `.timeout` failure döner
 
 #### 1.3.4 SwiftData Unique Constraint Normalize
-- [ ] `Word.term` save edilirken `lowercased() + trim`, görüntüleme için `displayTerm` ayrı
-- [ ] "Apple" vs "apple" duplicate'ini engelle
+- [x] `Word.init` term'i artık model katmanında normalize ediyor: `trimmingCharacters(.whitespacesAndNewlines).lowercased()`. Yeni `var displayTerm: String?` orijinal casing'i saklıyor (sadece lowercase'den farklıysa); `var displayName` computed property `displayTerm ?? term` ile fallback yapıyor. Static `Word.normalize(_:)` helper'ı eklendi.
+- [x] "Apple" vs "apple" duplicate'i artık model katmanında engellenir: `@Attribute(.unique) var term` ve init'teki lowercased zorlaması birlikte garantiyi sağlıyor (önceden defense at caller idi — gelecekteki bir yazar lowercased'ı unutursa düşmez)
+- [x] Display sites (`WordDetailView` navigationTitle + header, `StudyView` promptCard, `WordsListView` row, `HomeView` upcoming) `word.displayName` kullanıyor; `AddWordView.save()` artık trimmed-orijinal casing'i Word.init'e geçiriyor — kullanıcı "Apple" yazarsa term="apple", displayTerm="Apple"
+- Migration notu: yeni alan optional (`String?`), mevcut kayıtlar `nil` olarak gelir → `displayName` `term`'e düşer, görsel regresyon yok
 
 #### 1.3.5 Kelime Ailesi / İlişki Yükleme Göstergesi
 **Mevcut sorun:** Popover ve WordDetail'de kelime ailesi / synonyms / antonyms bölümleri yüklenirken (~5s AI streaming + Datamuse fetch) hiçbir gösterge yok. Yeni kullanıcı boş alanı "veri yok" sanıyor ve ekrandan çıkıyor.

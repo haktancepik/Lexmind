@@ -44,7 +44,7 @@ struct WordDetailView: View {
             }
             .padding()
         }
-        .navigationTitle(word.term)
+        .navigationTitle(word.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) { addedToast }
         .onAppear {
@@ -122,7 +122,7 @@ struct WordDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(word.term)
+                Text(word.displayName)
                     .font(.system(.largeTitle, design: .serif, weight: .bold))
                 Spacer()
                 if isRegenerating {

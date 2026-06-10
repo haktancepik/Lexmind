@@ -177,7 +177,7 @@ struct StudyView: View {
 
     private func promptCard(word: Word) -> some View {
         VStack(spacing: 12) {
-            Text(word.term)
+            Text(word.displayName)
                 .font(.system(size: 44, weight: .bold, design: .serif))
                 .multilineTextAlignment(.center)
             if revealed && !word.ipa.isEmpty {
