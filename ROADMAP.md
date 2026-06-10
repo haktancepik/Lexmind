@@ -28,11 +28,11 @@ ReadingPassageGenerator ve WordAnalyzer FoundationModels kullanıyor. iPhone 15 
 - [ ] iPhone 13/14 simulator'da end-to-end manuel test (manuel adım — kullanıcı tarafında doğrulanacak)
 
 ### 1.0.1 Privacy Manifest (ACİL — iOS 17+ zorunlu)
-- [ ] `Lexmind/PrivacyInfo.xcprivacy` ekle
-- [ ] `NSPrivacyAccessedAPITypes`: `UserDefaults`, `FileTimestamp`, `SystemBootTime` (SwiftData/file IO için)
-- [ ] `NSPrivacyTracking: false`, `NSPrivacyCollectedDataTypes: []`
-- [ ] Datamuse domain'i için `NSPrivacyTrackingDomains` (boş liste yeter, ama deklarasyon olmalı)
-- [ ] Archive build'de `validate` adımı warning vermiyor
+- [x] `Lexmind/PrivacyInfo.xcprivacy` eklendi, Xcode target bundle'ına dahil edildi
+- [x] `NSPrivacyAccessedAPITypes`: `FileTimestamp` (C617.1 — SwiftData/SQLite app container) + `UserDefaults` (CA92.1 — yakında gelecek @AppStorage için). SystemBootTime kullanılmadığından deklare edilmedi (yanlış beyandan kaçınmak için).
+- [x] `NSPrivacyTracking: false`, `NSPrivacyCollectedDataTypes: []` (Datamuse trackingle ilgili değil, sadece sözlük lookup)
+- [x] `NSPrivacyTrackingDomains: []` (boş ama deklare)
+- [ ] Archive build + App Store Connect validate adımı (TestFlight'a yüklerken kontrol edilecek — şu an local build temiz)
 
 ### 1.1 Settings Ekranı (temel — gerisinin önkoşulu)
 HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçimi hepsi buraya bağlanacak.
