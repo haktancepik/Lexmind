@@ -75,10 +75,10 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 
 #### 1.3.5 Kelime Ailesi / İlişki Yükleme Göstergesi
 **Mevcut sorun:** Popover ve WordDetail'de kelime ailesi / synonyms / antonyms bölümleri yüklenirken (~5s AI streaming + Datamuse fetch) hiçbir gösterge yok. Yeni kullanıcı boş alanı "veri yok" sanıyor ve ekrandan çıkıyor.
-- [ ] `WordQuickLookupCard.familySection` ve `inflectionSection`: veri henüz yokken `ProgressView` + "Kelime ailesi yükleniyor…" satırı
-- [ ] `WordDetailView` family / relations bölümleri: aynı pattern, sectionHeader yanında küçük spinner (`ProgressView(.controlSize(.small))`)
-- [ ] Yükleme bitince bölüm fade-in animation
-- [ ] Datamuse arka plan doğrulaması ayrı: "Doğrulanıyor…" sub-badge (verified vs ai ikonu yüklenene kadar)
+- [x] `QuickLookupService.LookupResult.isStreaming` computed eklendi (sadece `.partialAI`'de true). `WordQuickLookupCard.familySection` ve `inflectionSection` streaming sırasında alan boşsa `ProgressView(.controlSize(.mini))` + "Kelime ailesi yükleniyor…" / "Çekim örnekleri yükleniyor…" satırı gösteriyor; stream bitince veri varsa içerik, yoksa hiç bir şey
+- [x] `WordDetailView.relationsCard` ve `familyCard`: `isRegenerating && empty` durumunda büyük loading row ("İlişkiler yükleniyor…" / "Kelime ailesi yükleniyor…"). `sectionCard` artık `isWorking` parametresi alıyor — başlık yanında `ProgressView(.controlSize(.small))` gösteriyor
+- [x] Tüm transition'lar `.transition(.opacity)` + parent `.animation(.easeInOut(0.25), value:)` ile fade-in
+- [x] Datamuse arka plan doğrulaması: `RelationVerifier.isVerifying: Bool` flag'i eklendi (defer ile applyVerifiedRelations boyunca true). WordDetailView ilişkiler/aile kartında `verifyingBadge` ("Doğrulanıyor…" + mini spinner) gösteriliyor — hata varsa offline badge önceliği alıyor
 
 ### 1.4 FSRS Unit Testleri (algoritma kullanıcı verisinin kalbi)
 - [ ] `LexmindTests/FSRSSchedulerTests.swift` oluştur

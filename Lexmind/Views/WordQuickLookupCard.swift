@@ -147,7 +147,11 @@ struct WordQuickLookupCard: View {
     private func familySection(_ result: QuickLookupService.LookupResult) -> some View {
         let root = result.familyRoot
         let members = result.familyMembers
-        if !root.isEmpty || !members.isEmpty {
+        let isEmpty = root.isEmpty && members.isEmpty
+        if isEmpty && result.isStreaming {
+            loadingRow(text: "Kelime ailesi yükleniyor…")
+                .transition(.opacity)
+        } else if !isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Kelime Ailesi")
                     .font(.caption2.bold())
@@ -178,13 +182,17 @@ struct WordQuickLookupCard: View {
                 }
             }
             .padding(.top, 2)
+            .transition(.opacity)
         }
     }
 
     @ViewBuilder
     private func inflectionSection(_ result: QuickLookupService.LookupResult) -> some View {
         let sentences = Array(result.inflectionExamples.prefix(2))
-        if !sentences.isEmpty {
+        if sentences.isEmpty && result.isStreaming {
+            loadingRow(text: "Çekim örnekleri yükleniyor…")
+                .transition(.opacity)
+        } else if !sentences.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Çekim Örnekleri")
                     .font(.caption2.bold())
@@ -198,6 +206,18 @@ struct WordQuickLookupCard: View {
                 }
             }
             .padding(.top, 2)
+            .transition(.opacity)
         }
+    }
+
+    private func loadingRow(text: String) -> some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .controlSize(.mini)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 2)
     }
 }

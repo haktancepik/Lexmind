@@ -319,26 +319,60 @@ struct WordDetailView: View {
 
     @ViewBuilder
     private var relationsCard: some View {
-        if !word.relations.isEmpty {
-            sectionCard(title: "İlişkili Kelimeler", icon: "link") {
-                let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
-                VStack(alignment: .leading, spacing: 12) {
-                    if let error = verifier.lastError, error.isRetryable {
-                        datamuseOfflineBadge(message: error.userMessage)
-                    }
-                    ForEach(RelationKind.allCases) { kind in
-                        if let items = grouped[kind], !items.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Label(kind.label, systemImage: kind.symbol)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.secondary)
-                                relationChipsRow(items: sortedItems(items))
+        let showsLoading = word.relations.isEmpty && isRegenerating
+        if !word.relations.isEmpty || showsLoading {
+            sectionCard(title: "İlişkili Kelimeler", icon: "link", isWorking: verifier.isVerifying) {
+                if showsLoading {
+                    enrichLoadingRow(text: "İlişkiler yükleniyor…")
+                        .transition(.opacity)
+                } else {
+                    let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let error = verifier.lastError, error.isRetryable {
+                            datamuseOfflineBadge(message: error.userMessage)
+                        } else if verifier.isVerifying {
+                            verifyingBadge
+                        }
+                        ForEach(RelationKind.allCases) { kind in
+                            if let items = grouped[kind], !items.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Label(kind.label, systemImage: kind.symbol)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.secondary)
+                                    relationChipsRow(items: sortedItems(items))
+                                }
                             }
                         }
                     }
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: word.relations.count)
+            .animation(.easeInOut(duration: 0.25), value: verifier.isVerifying)
         }
+    }
+
+    private var verifyingBadge: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.mini)
+            Text("Doğrulanıyor…")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func enrichLoadingRow(text: String) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
     }
 
     private func datamuseOfflineBadge(message: String) -> some View {
@@ -379,35 +413,47 @@ struct WordDetailView: View {
     private var familyCard: some View {
         let hasRoot = (word.familyRoot?.isEmpty == false)
         let hasMembers = !word.familyMembers.isEmpty
-        if hasRoot || hasMembers {
-            sectionCard(title: "Kelime Ailesi", icon: "person.3") {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let root = word.familyRoot, !root.isEmpty {
-                        HStack(spacing: 6) {
-                            Text("Kök:")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Button {
-                                handleTermTap(root)
-                            } label: {
-                                Text(root)
-                                    .font(.subheadline.bold())
-                                    .padding(.horizontal, 10).padding(.vertical, 4)
-                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(Color.accentColor)
+        let showsLoading = !hasRoot && !hasMembers && isRegenerating
+        if hasRoot || hasMembers || showsLoading {
+            sectionCard(title: "Kelime Ailesi", icon: "person.3", isWorking: verifier.isVerifying) {
+                if showsLoading {
+                    enrichLoadingRow(text: "Kelime ailesi yükleniyor…")
+                        .transition(.opacity)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if verifier.isVerifying && verifier.lastError == nil {
+                            verifyingBadge
+                        }
+                        if let root = word.familyRoot, !root.isEmpty {
+                            HStack(spacing: 6) {
+                                Text("Kök:")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    handleTermTap(root)
+                                } label: {
+                                    Text(root)
+                                        .font(.subheadline.bold())
+                                        .padding(.horizontal, 10).padding(.vertical, 4)
+                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        }
+                        if hasMembers {
+                            let verifiedSet = Set(word.familyMembersVerifiedRaw)
+                            relationChipsRow(items: word.familyMembers.map {
+                                (term: $0,
+                                 origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
+                            })
                         }
                     }
-                    if hasMembers {
-                        let verifiedSet = Set(word.familyMembersVerifiedRaw)
-                        relationChipsRow(items: word.familyMembers.map {
-                            (term: $0,
-                             origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
-                        })
-                    }
+                    .transition(.opacity)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: word.familyMembers.count)
+            .animation(.easeInOut(duration: 0.25), value: verifier.isVerifying)
         }
     }
 
@@ -553,10 +599,20 @@ struct WordDetailView: View {
 
     private func sectionCard<Content: View>(title: String,
                                             icon: String,
+                                            isWorking: Bool = false,
                                             @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: icon)
-                .font(.headline)
+            HStack(spacing: 8) {
+                Label(title, systemImage: icon)
+                    .font(.headline)
+                if isWorking {
+                    ProgressView()
+                        .controlSize(.small)
+                        .transition(.opacity)
+                }
+                Spacer(minLength: 0)
+            }
+            .animation(.easeInOut(duration: 0.2), value: isWorking)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

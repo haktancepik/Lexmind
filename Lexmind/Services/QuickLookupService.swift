@@ -76,6 +76,14 @@ final class QuickLookupService {
             case .partialAI(let p): return (p.inflectionExamples ?? []).compactMap { $0 }
             }
         }
+
+        /// `true` while AI is still streaming partial results. Card sections
+        /// (family, inflection, …) treat empty fields as "still loading"
+        /// instead of "no data" only while this is true.
+        var isStreaming: Bool {
+            if case .partialAI = self { return true }
+            return false
+        }
     }
 
     enum Phase {

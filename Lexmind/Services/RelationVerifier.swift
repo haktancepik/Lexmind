@@ -15,6 +15,11 @@ final class RelationVerifier {
     /// to show an "offline" badge with a Retry button.
     var lastError: DatamuseError? = nil
 
+    /// `true` while an `applyVerifiedRelations` call is in flight. Views show
+    /// a "Doğrulanıyor…" spinner badge next to relations / family while this
+    /// is on so the user knows verification is still happening.
+    var isVerifying: Bool = false
+
     init(client: DatamuseClient = .shared) {
         self.client = client
     }
@@ -42,6 +47,9 @@ final class RelationVerifier {
                                 related: [String],
                                 familyMembers: [String],
                                 familyRoot: String?) async {
+        isVerifying = true
+        defer { isVerifying = false }
+
         async let synResult = client.terms(for: term, endpoint: .synonyms)
         async let antResult = client.terms(for: term, endpoint: .antonyms)
         async let relResult = client.terms(for: term, endpoint: .related)
