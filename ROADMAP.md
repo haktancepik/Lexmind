@@ -63,9 +63,9 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [ ] **Neden kritik:** Reviewer test ederken bir force_cast crash'i = direkt rejection (bu risk şu an mevcut değil)
 
 #### 1.3.3 Datamuse Error UX
-- [ ] `DatamuseClient` dönüş tipi `Result<[Suggestion], DatamuseError>`'a geç
-- [ ] View'larda offline badge + retry butonu
-- [ ] 4s timeout sonrası 1 kez retry
+- [x] `DatamuseClient.terms(for:endpoint:)` ve `wordExists(_:)` artık `Result<Set<String>, DatamuseError>` / `Result<Bool, DatamuseError>` döndürüyor. `DatamuseError` enum'ı: `.offline`, `.timeout`, `.serverError(Int)`, `.invalidResponse`, `.invalidQuery` (+ `userMessage` + `isRetryable`). URLError kodları offline/timeout'a düzgün eşleniyor. Cache yalnızca success sonuçlarını saklıyor — failure'da tekrar denenir.
+- [x] `RelationVerifier` `@Observable` oldu, `lastError: DatamuseError?` yayımlıyor. `WordDetailView.relationsCard`'a `retryable` hatada turuncu offline badge + "Tekrar dene" butonu eklendi; buton `verifier.retryVerification(for: word)` ile mevcut AI ilişkilerini Datamuse'a yeniden doğrulatıyor (başarılıysa badge kaybolur, badge'ler güncellenir)
+- [x] Timeout sonrası 1 kez retry: `fetchWords(retriesRemaining:)` ilk `URLError.timedOut`'ta otomatik yeniden çağırılıyor; ikinci timeout'ta `.timeout` failure döner
 
 #### 1.3.4 SwiftData Unique Constraint Normalize
 - [ ] `Word.term` save edilirken `lowercased() + trim`, görüntüleme için `displayTerm` ayrı

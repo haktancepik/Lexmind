@@ -323,6 +323,9 @@ struct WordDetailView: View {
             sectionCard(title: "İlişkili Kelimeler", icon: "link") {
                 let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
                 VStack(alignment: .leading, spacing: 12) {
+                    if let error = verifier.lastError, error.isRetryable {
+                        datamuseOfflineBadge(message: error.userMessage)
+                    }
                     ForEach(RelationKind.allCases) { kind in
                         if let items = grouped[kind], !items.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
@@ -336,6 +339,40 @@ struct WordDetailView: View {
                 }
             }
         }
+    }
+
+    private func datamuseOfflineBadge(message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.slash")
+                .font(.subheadline)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("İlişkiler doğrulanamadı, AI önerileri gösteriliyor.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button {
+                Task { await verifier.retryVerification(for: word) }
+            } label: {
+                Label("Tekrar dene", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(.orange)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.orange.opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(message). İlişkiler doğrulanamadı.")
     }
 
     @ViewBuilder
