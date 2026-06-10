@@ -81,11 +81,12 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [x] Datamuse arka plan doğrulaması: `RelationVerifier.isVerifying: Bool` flag'i eklendi (defer ile applyVerifiedRelations boyunca true). WordDetailView ilişkiler/aile kartında `verifyingBadge` ("Doğrulanıyor…" + mini spinner) gösteriliyor — hata varsa offline badge önceliği alıyor
 
 ### 1.4 FSRS Unit Testleri (algoritma kullanıcı verisinin kalbi)
-- [ ] `LexmindTests/FSRSSchedulerTests.swift` oluştur
-- [ ] Bilinen input/output çiftleri (FSRS-4.5 paper'dan veya open-source referans)
-- [ ] `again`, `hard`, `good`, `easy` her birinin stability/difficulty etkisi
-- [ ] State transitions: `new → learning → review → relearning`
-- [ ] Edge case: ilk review (reps=0), uzun gap (elapsedDays >> scheduledDays), zaman geriye giderse
+- [x] `LexmindTests/FSRSSchedulerTests.swift` oluşturuldu — 17 test, Swift Testing framework (`@Test`), in-memory `ModelContainer` ile FSRSCard instance üretiyor. Tüm testler Xcode GetTestList'te görünüyor
+- [x] Bilinen input/output çiftleri: `newCard_initialStability_matchesWeights` w[0..3] sabitleriyle (.40255, 1.18385, 3.173, 15.69105) golden values; geri kalan değerler weight tuning'e dirençli olsun diye property/invariant style (ordering, bounds, monotonicity)
+- [x] `again`/`hard`/`good`/`easy` etkileri: `review_stabilityGain_easy_outranks_good_outranks_hard` ordering; `reviewState_again_movesToRelearning_andLapsesIncrement`; `reps_alwaysIncrement_byOne`; `difficulty_alwaysInBounds` ([1,10] her state/rating kombinasyonunda)
+- [x] State transitions: `new → learning/review` (again/hard/good vs easy); `learning → review` (good/easy); `review → relearning` (again); `relearning → review` (good/easy); `relearning → relearning` (again); `learning → learning` (again/hard); `review → review` (hard/good/easy)
+- [x] Edge cases: `elapsedDays_clampsToZero_whenNowIsBeforeLastReview` (zaman geriye gitti); `longGap_doesNotCrash_andProducesFiniteStability` (365 gün gap, finite stability garantisi); `newCard_again_dueWithinShortLearningWindow` (1 dk window); `newCard_easy_dueAtLeastOneDayAway`; `apply_writesResultBackToCard`
+- Not: Test target (LexmindTests/LexmindUITests) "Signing requires development team" hatası veriyor — kullanıcının Xcode'da Signing & Capabilities'ten team seçmesi gerek. Testler kod tarafında temiz, signing setup yapıldıktan sonra çalıştırılacak (manuel adım — kullanıcı tarafında)
 
 ### 1.5 SwiftData Migration Planı
 - [ ] `VersionedSchema` enum'ı oluştur — şu anki şema `SchemaV1`
