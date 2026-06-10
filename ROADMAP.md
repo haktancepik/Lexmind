@@ -37,10 +37,10 @@ ReadingPassageGenerator ve WordAnalyzer FoundationModels kullanıyor. iPhone 15 
 ### 1.1 Settings Ekranı (temel — gerisinin önkoşulu)
 HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçimi hepsi buraya bağlanacak.
 
-- [ ] `Views/SettingsView.swift` oluştur — 5. tab veya RootTab'ta gear ikonu
-- [ ] İçerik: günlük hedef, bildirim saati (Faz 2'de aktif), dil seçimi (Faz 2'de aktif), data export/import (Faz 2'de aktif), paywall girişi (Faz 2'de aktif), sürüm/build bilgisi, gizlilik politikası linki, lisanslar
-- [ ] HomeView'daki inline Stepper'ı kaldır, Settings'e taşı
-- [ ] App icon + tagline header
+- [x] `Views/SettingsView.swift` oluşturuldu, RootTabView'a 5. tab olarak (gearshape.fill) eklendi
+- [x] İçerik: Günlük Hedef (aktif), Bildirimler / Dil / Veri / Pro (Faz 2 placeholder satırları), Hakkında bölümü (gizlilik/koşullar/lisanslar — 1.10'da bağlanacak; sürüm bilgisi `CFBundleShortVersionString` + `CFBundleVersion`'dan)
+- [x] HomeView'daki inline Stepper bölümü kaldırıldı; günlük hedef artık sadece Settings'ten yönetiliyor
+- [x] Header: brain.head.profile gradient icon + "Lexmind" + tagline "FSRS tabanlı kelime öğrenme"
 
 ### 1.2 Onboarding + İlk Açılış Akışı
 Şu anda app direkt 4-tab TabView açıyor, boş kelime listesi gösteriyor. Yüksek terk oranı riski.

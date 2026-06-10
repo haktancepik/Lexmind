@@ -62,7 +62,6 @@ struct HomeView: View {
                         readingCard
                     }
                     statsRow
-                    quickActions
                     if !nextDueWords.isEmpty {
                         upcomingSection
                     }
@@ -224,29 +223,6 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-        )
-    }
-
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Hedefler").font(.headline)
-            HStack {
-                Stepper("Günlük yeni: **\(goal.newCardsPerDay)**",
-                        value: Binding(get: { goal.newCardsPerDay },
-                                       set: { goal.newCardsPerDay = $0 }),
-                        in: 0...100, step: 5)
-            }
-            HStack {
-                Stepper("Günlük tekrar: **\(goal.reviewsPerDay)**",
-                        value: Binding(get: { goal.reviewsPerDay },
-                                       set: { goal.reviewsPerDay = $0 }),
-                        in: 5...500, step: 5)
-            }
-        }
-        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)

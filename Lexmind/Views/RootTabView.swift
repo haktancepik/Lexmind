@@ -24,6 +24,10 @@ struct RootTabView: View {
             Tab("İstatistik", systemImage: "chart.bar.xaxis") {
                 StatsView()
             }
+
+            Tab("Ayarlar", systemImage: "gearshape.fill") {
+                SettingsView()
+            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
     }
