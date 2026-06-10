@@ -137,6 +137,13 @@ final class QuickLookupService {
             return true
         }
 
+        if let oxford = OxfordWordsLibrary.find(key) {
+            let result: LookupResult = .common(oxford)
+            cache[key] = result
+            phase = .ready(term: key, result: result)
+            return true
+        }
+
         phase = .loading(term: key)
         return false
     }
@@ -145,6 +152,15 @@ final class QuickLookupService {
         let key = normalize(rawTerm)
         guard !key.isEmpty else { return }
         let requestID = currentRequestID
+
+        if !analyzer.isAvailable {
+            phase = .failed(
+                term: key,
+                message: analyzer.availabilityMessage
+                    ?? "Bu kelime sözlüğümüzde yok ve cihaz Apple Intelligence'i desteklemiyor."
+            )
+            return
+        }
 
         do {
             for try await partial in analyzer.streamQuick(term: key) {

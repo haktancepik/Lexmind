@@ -134,6 +134,13 @@ struct AddWordView: View {
         let cleaned = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !cleaned.isEmpty else { return }
         errorMessage = nil
+
+        if !analyzer.isAvailable {
+            if applyLibraryLookup(cleaned) { return }
+            errorMessage = "Bu kelime sözlüğümüzde yok. Bilgileri elle doldurabilirsin."
+            return
+        }
+
         isAnalyzing = true
         Task {
             defer { isAnalyzing = false }
@@ -142,9 +149,45 @@ struct AddWordView: View {
                 analysis = result
                 applyAnalysis(result)
             } catch {
-                errorMessage = error.localizedDescription
+                if applyLibraryLookup(cleaned) {
+                    errorMessage = nil
+                } else {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
+    }
+
+    @discardableResult
+    private func applyLibraryLookup(_ term: String) -> Bool {
+        if let match = CommonWordsLibrary.find(term) ?? OxfordWordsLibrary.find(term) {
+            applyCommonWord(match)
+            return true
+        }
+        return false
+    }
+
+    private func applyCommonWord(_ c: CommonWord) {
+        partOfSpeech = c.partOfSpeech
+        ipa = c.ipa
+        countability = c.countability
+        definition = c.definition
+        turkishMeaning = c.turkishMeaning
+        var newExamples = c.examples
+        while newExamples.count < 5 { newExamples.append("") }
+        examples = Array(newExamples.prefix(5))
+        var newInfl = c.inflectionExamples
+        while newInfl.count < 3 { newInfl.append("") }
+        inflectionExamples = Array(newInfl.prefix(3))
+        level = c.level
+        if !c.topics.isEmpty {
+            selectedTopics = Set(c.topics)
+        }
+        familyRoot = c.familyRoot ?? ""
+        familyMembers = c.familyMembers
+        synonyms = c.synonyms.map { $0.term }
+        antonyms = c.antonyms.map { $0.term }
+        relatedWords = c.related.map { $0.term }
     }
 
     private func applyAnalysis(_ a: WordAnalysis) {

@@ -41,19 +41,7 @@ struct ReadingPassageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let unavailable = generator.availabilityMessage {
-                    unavailableCard(message: unavailable)
-                } else if let stored = todaysPassage {
-                    passageCard(stored: stored)
-                } else if studiedToday.isEmpty {
-                    emptyStudiedCard
-                } else if isGenerating {
-                    generatingCard
-                } else if let error {
-                    errorCard(error)
-                } else {
-                    Color.clear.frame(height: 1)
-                }
+                mainContent
             }
             .padding()
         }
@@ -102,6 +90,45 @@ struct ReadingPassageView: View {
         ) { wrapper in
             lookupCard(for: wrapper.value)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    // MARK: - Main content router
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if let unavailable = generator.availabilityMessage {
+            fallbackContent(unavailable: unavailable)
+        } else {
+            primaryContent
+        }
+    }
+
+    @ViewBuilder
+    private func fallbackContent(unavailable: String) -> some View {
+        if studiedToday.isEmpty {
+            unavailableBanner(message: unavailable)
+            emptyStudiedCard
+        } else if let recap = ReadingFallbackBuilder.build(from: studiedToday) {
+            unavailableBanner(message: unavailable)
+            recapCard(recap)
+        } else {
+            unavailableCard(message: unavailable)
+        }
+    }
+
+    @ViewBuilder
+    private var primaryContent: some View {
+        if let stored = todaysPassage {
+            passageCard(stored: stored)
+        } else if studiedToday.isEmpty {
+            emptyStudiedCard
+        } else if isGenerating {
+            generatingCard
+        } else if let error {
+            errorCard(error)
+        } else {
+            Color.clear.frame(height: 1)
         }
     }
 
@@ -205,6 +232,118 @@ struct ReadingPassageView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.regularMaterial)
         )
+    }
+
+    @ViewBuilder
+    private func unavailableBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles.slash")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Özet modu")
+                    .font(.caption.bold())
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.orange.opacity(0.12))
+        )
+    }
+
+    @ViewBuilder
+    private func recapCard(_ recap: ReadingRecap) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(recap.title)
+                    .font(.title3.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let cefr = recap.dominantCEFR {
+                    Text(cefr.label)
+                        .font(.caption.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            Text("Bugün çalıştığın \(recap.items.count) kelimenin özeti.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            ForEach(Array(recap.items.enumerated()), id: \.element.id) { index, item in
+                recapRow(item)
+                if index < recap.items.count - 1 {
+                    Divider()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.regularMaterial)
+        )
+    }
+
+    @ViewBuilder
+    private func recapRow(_ item: ReadingRecap.Item) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Button {
+                    handleTokenTap(item.term)
+                } label: {
+                    Text(item.term)
+                        .font(.headline)
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+
+                if !item.partOfSpeech.isEmpty {
+                    Text(item.partOfSpeech)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.blue)
+                }
+                if let cefr = item.cefrLevel {
+                    Text(cefr.label)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        .foregroundStyle(Color.accentColor)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if !item.ipa.isEmpty {
+                Text(item.ipa)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            if !item.turkishMeaning.isEmpty {
+                Text(item.turkishMeaning)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+            }
+
+            if let example = item.example {
+                TappableText(
+                    text: example,
+                    highlightedTerm: item.term,
+                    highlightedTerms: [item.term.lowercased()],
+                    baseColor: .secondaryLabel,
+                    onTokenTap: { term in handleTokenTap(term) }
+                )
+                .font(.footnote)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
