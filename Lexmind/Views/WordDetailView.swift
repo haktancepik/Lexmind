@@ -52,6 +52,12 @@ struct WordDetailView: View {
                 lookup = QuickLookupService(analyzer: analyzer)
             }
         }
+        .task {
+            async let common: Void = CommonWordsLibrary.preload()
+            async let oxford: Void = OxfordWordsLibrary.preload()
+            _ = await common
+            _ = await oxford
+        }
         .task(id: allWords.count) {
             existingTerms = Set(allWords.map { $0.term })
         }

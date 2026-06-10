@@ -95,6 +95,15 @@ enum CommonWordsLibrary {
 
     // MARK: - Loading
 
+    /// Warms the lazy `static let all` initializer on a background task so the
+    /// JSON decode does not block the calling (usually main) thread on first
+    /// access. Idempotent — repeated calls return immediately.
+    nonisolated static func preload() async {
+        await Task.detached(priority: .utility) {
+            _ = CommonWordsLibrary.all
+        }.value
+    }
+
     nonisolated private static func loadAll() -> [CommonWord] {
         guard let url = Bundle.main.url(forResource: "common", withExtension: "json") else {
             #if DEBUG

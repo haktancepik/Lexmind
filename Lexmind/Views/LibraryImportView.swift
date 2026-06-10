@@ -47,6 +47,7 @@ struct LibraryImportView: View {
     @State private var importTask: Task<Void, Never>?
     @State private var importCancelled: Bool = false
     @State private var existingTerms: Set<String> = []
+    @State private var librariesReady: Bool = false
 
     private struct ImportProgress: Equatable {
         var total: Int
@@ -76,35 +77,13 @@ struct LibraryImportView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    summaryRow
-                }
-
-                Section {
-                    filterChips
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                        .listRowBackground(Color.clear)
-                }
-
-                if filtered.isEmpty {
-                    Section("Kelimeler (0)") {
-                        Text("Eşleşen kelime bulunamadı.")
-                            .foregroundStyle(.secondary)
-                    }
+            Group {
+                if librariesReady {
+                    libraryList
                 } else {
-                    ForEach(groupedByLevel(filtered), id: \.0) { level, words in
-                        Section {
-                            ForEach(words) { word in
-                                row(for: word)
-                            }
-                        } header: {
-                            levelSectionHeader(level: level, words: words)
-                        }
-                    }
+                    loadingState
                 }
             }
-            .searchable(text: $searchText, prompt: "Kütüphanede ara")
             .navigationTitle("Hazır Kütüphane")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -112,14 +91,16 @@ struct LibraryImportView: View {
                     Button("Kapat") { dismiss() }
                         .disabled(importTask != nil)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        importVisible()
-                    } label: {
-                        Label("Hepsini Ekle (\(visibleNewCount))",
-                              systemImage: "tray.and.arrow.down.fill")
+                if librariesReady {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            importVisible()
+                        } label: {
+                            Label("Hepsini Ekle (\(visibleNewCount))",
+                                  systemImage: "tray.and.arrow.down.fill")
+                        }
+                        .disabled(visibleNewCount == 0 || importTask != nil)
                     }
-                    .disabled(visibleNewCount == 0 || importTask != nil)
                 }
             }
             .alert(importErrorMessage == nil ? "İçe aktarıldı" : "Hata",
@@ -148,7 +129,59 @@ struct LibraryImportView: View {
             .onChange(of: existingWords.count) { _, _ in
                 refreshExistingTerms()
             }
+            .task {
+                guard !librariesReady else { return }
+                async let common: Void = CommonWordsLibrary.preload()
+                async let oxford: Void = OxfordWordsLibrary.preload()
+                _ = await common
+                _ = await oxford
+                librariesReady = true
+            }
         }
+    }
+
+    @ViewBuilder
+    private var libraryList: some View {
+        List {
+            Section {
+                summaryRow
+            }
+
+            Section {
+                filterChips
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
+
+            if filtered.isEmpty {
+                Section("Kelimeler (0)") {
+                    Text("Eşleşen kelime bulunamadı.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(groupedByLevel(filtered), id: \.0) { level, words in
+                    Section {
+                        ForEach(words) { word in
+                            row(for: word)
+                        }
+                    } header: {
+                        levelSectionHeader(level: level, words: words)
+                    }
+                }
+            }
+        }
+        .searchable(text: $searchText, prompt: "Kütüphanede ara")
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Kelime kütüphanesi hazırlanıyor…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

@@ -127,6 +127,12 @@ struct AddWordView: View {
                     .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
+            .task {
+                async let common: Void = CommonWordsLibrary.preload()
+                async let oxford: Void = OxfordWordsLibrary.preload()
+                _ = await common
+                _ = await oxford
+            }
         }
     }
 

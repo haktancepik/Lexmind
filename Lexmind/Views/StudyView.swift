@@ -67,6 +67,12 @@ struct StudyView: View {
                     lookup = QuickLookupService(analyzer: analyzer)
                 }
             }
+            .task {
+                async let common: Void = CommonWordsLibrary.preload()
+                async let oxford: Void = OxfordWordsLibrary.preload()
+                _ = await common
+                _ = await oxford
+            }
             .task(id: words.count) {
                 existingTerms = Set(words.map { $0.term })
             }

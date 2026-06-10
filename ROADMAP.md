@@ -54,8 +54,8 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 ### 1.3 Performans & Stabilite
 
 #### 1.3.1 JSON Lazy Loading
-- [ ] `CommonWordsLibrary.loadAll()` ve `OxfordWordsLibrary.loadAll()` startup'tan kaldır, `LibraryImportView` açıldığında `Task.detached` ile yükle
-- [ ] Instruments Time Profiler ile app launch'ta JSON decode süresini ölç — hedef <500ms
+- [x] `CommonWordsLibrary` ve `OxfordWordsLibrary`'ye `preload() async` eklendi (`Task.detached(.utility)` ile arka planda warm-up); `LibraryImportView` `.task` içinden iki kütüphaneyi paralel preload ediyor, hazır olana kadar `ProgressView`. Lookup callsite'ları (StudyView, WordDetailView, ReadingPassageView, AddWordView) view appear'da preload tetikliyor — popover ilk açıldığında main thread'de senkron JSON decode olmuyor
+- [ ] Instruments Time Profiler ile app launch'ta JSON decode süresini ölç — hedef <500ms (manuel adım — kullanıcı tarafında doğrulanacak)
 
 #### 1.3.2 Force Unwrap Temizliği
 - [ ] 120+ `!` operator → `guard let` / `if let` / default value
