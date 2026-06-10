@@ -71,6 +71,13 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [ ] `Word.term` save edilirken `lowercased() + trim`, görüntüleme için `displayTerm` ayrı
 - [ ] "Apple" vs "apple" duplicate'ini engelle
 
+#### 1.3.5 Kelime Ailesi / İlişki Yükleme Göstergesi
+**Mevcut sorun:** Popover ve WordDetail'de kelime ailesi / synonyms / antonyms bölümleri yüklenirken (~5s AI streaming + Datamuse fetch) hiçbir gösterge yok. Yeni kullanıcı boş alanı "veri yok" sanıyor ve ekrandan çıkıyor.
+- [ ] `WordQuickLookupCard.familySection` ve `inflectionSection`: veri henüz yokken `ProgressView` + "Kelime ailesi yükleniyor…" satırı
+- [ ] `WordDetailView` family / relations bölümleri: aynı pattern, sectionHeader yanında küçük spinner (`ProgressView(.controlSize(.small))`)
+- [ ] Yükleme bitince bölüm fade-in animation
+- [ ] Datamuse arka plan doğrulaması ayrı: "Doğrulanıyor…" sub-badge (verified vs ai ikonu yüklenene kadar)
+
 ### 1.4 FSRS Unit Testleri (algoritma kullanıcı verisinin kalbi)
 - [ ] `LexmindTests/FSRSSchedulerTests.swift` oluştur
 - [ ] Bilinen input/output çiftleri (FSRS-4.5 paper'dan veya open-source referans)
