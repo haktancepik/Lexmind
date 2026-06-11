@@ -89,10 +89,11 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - Not: Test target (LexmindTests/LexmindUITests) "Signing requires development team" hatası veriyor — kullanıcının Xcode'da Signing & Capabilities'ten team seçmesi gerek. Testler kod tarafında temiz, signing setup yapıldıktan sonra çalıştırılacak (manuel adım — kullanıcı tarafında)
 
 ### 1.5 SwiftData Migration Planı
-- [ ] `VersionedSchema` enum'ı oluştur — şu anki şema `SchemaV1`
-- [ ] `SchemaMigrationPlan` tanımla (boş bile olsa, sonraki sürüm için iskelet)
-- [ ] `LexmindApp.swift`'te `ModelConfiguration` + migration plan'i bağla
-- [ ] Test: önce eski şema ile DB oluştur, V2 ekle, lightweight migration çalıştığını doğrula
+- [x] `Models/LexmindSchema.swift` oluşturuldu — `LexmindSchemaV1: VersionedSchema` 6 model'i listeliyor (`Word`, `FSRSCard`, `ReviewLog`, `DailyGoal`, `WordRelation`, `DailyReadingPassage`), `versionIdentifier = Schema.Version(1, 0, 0)`
+- [x] `LexmindMigrationPlan: SchemaMigrationPlan` iskelet: `schemas = [LexmindSchemaV1.self]`, `stages = []`. V2 geldiğinde stages array'ine `.lightweight(fromVersion:toVersion:)` eklenecek
+- [x] `LexmindApp.swift` `init()` içinde manuel `ModelContainer(for:migrationPlan:configurations:)` kuruyor — `Schema(versionedSchema: LexmindSchemaV1.self)` ile, `.modelContainer(modelContainer)` scene modifier ile bağlandı. Eski `.modelContainer(for: [...])` çağrısı kaldırıldı
+- [x] `LexmindTests/SwiftDataMigrationTests.swift` — 5 smoke test: V1 version `1.0.0`, models listesi tam 6 element, plan sadece V1 içeriyor, stages şu an boş, in-memory container migration plan ile build oluyor + insert/fetch round-trip çalışıyor. Toplam test sayısı 17→22 (FSRS 17 + Migration 5)
+- Not: Gerçek V1→V2 lightweight migration testi V2 şeması yazıldığında eklenecek (şu an tek versiyon var)
 
 ### 1.6 View Refactor (test edilebilirlik + bakım)
 - [ ] `StudyView` 596 → <250 satır: `@Observable StudySession` ayrı sınıf, `RatingButtons` + `LookupPopover` subview'lar

@@ -10,6 +10,22 @@ import SwiftData
 struct LexmindApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    let modelContainer: ModelContainer
+
+    init() {
+        do {
+            let schema = Schema(versionedSchema: LexmindSchemaV1.self)
+            let configuration = ModelConfiguration(schema: schema)
+            modelContainer = try ModelContainer(
+                for: schema,
+                migrationPlan: LexmindMigrationPlan.self,
+                configurations: [configuration]
+            )
+        } catch {
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             if hasCompletedOnboarding {
@@ -18,13 +34,6 @@ struct LexmindApp: App {
                 OnboardingView()
             }
         }
-        .modelContainer(for: [
-            Word.self,
-            FSRSCard.self,
-            ReviewLog.self,
-            DailyGoal.self,
-            WordRelation.self,
-            DailyReadingPassage.self
-        ])
+        .modelContainer(modelContainer)
     }
 }
