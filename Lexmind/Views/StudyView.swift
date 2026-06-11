@@ -169,21 +169,14 @@ struct StudyView: View {
 
     // MARK: - Token lookup popover
 
-    @ViewBuilder
     private func lookupCard(for term: String) -> some View {
-        if let lookup {
-            WordQuickLookupCard(
-                phase: lookup.phase,
-                isAlreadyInLibrary: termExists(term),
-                isAdding: isAddingFromPopover,
-                onAddToLibrary: { t in
-                    Task { await addFromPopover(t) }
-                },
-                onRetry: { t in
-                    Task { await lookup.lookup(term: t, in: words) }
-                }
-            )
-        }
+        LookupPopoverContent(
+            lookup: lookup,
+            isAlreadyInLibrary: termExists(term),
+            isAdding: isAddingFromPopover,
+            words: words,
+            onAdd: { await addFromPopover($0) }
+        )
     }
 
     private func handleTokenTap(_ term: String) {
