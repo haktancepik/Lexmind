@@ -99,41 +99,41 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 Şu an tüm Word'ler global tek bucket'ta — kullanıcı 2000+ kelimeli kütüphaneyi sade çalışamıyor. Hazır kütüphane CEFR seviyeli alt-destelere bölünür (A1/A2/B1/B2/C1/C2), kullanıcı kendi destelerini oluşturup adlandırabilir, birleştirebilir. 1.5'te kurulan migration plan iskeletinin gerçek ilk kullanımı (V1 → V2 custom migration).
 
 **Schema V2 (`LexmindSchemaV2`):**
-- [ ] `Models/WordDeck.swift`: yeni `@Model final class WordDeck` — `id: UUID @unique`, `name: String`, `isPreset: Bool`, `presetLevelRaw: String?` (preset desteler için "A1".."C2", kullanıcı destelerinde nil), `createdAt: Date`, `sortOrder: Int`, `@Relationship words: [Word]` (many-to-many, no cascade delete)
-- [ ] `Word.decks: [WordDeck]` inverse relationship. Cascade davranışı: deste silinince Word **silinmez** (sadece M:N bağ kalkar). Word silinince `deck.words`'ten otomatik çıkar
-- [ ] `Models/LexmindSchema.swift`'e `LexmindSchemaV2: VersionedSchema` ekle — V1 6 model + WordDeck. `versionIdentifier = Schema.Version(2, 0, 0)`
-- [ ] `LexmindMigrationPlan.stages` doldur: `.custom(fromVersion: LexmindSchemaV1.self, toVersion: LexmindSchemaV2.self, willMigrate: nil, didMigrate: { context in ... })`. `didMigrate` 6 preset deste oluşturur ("A1".."C2", `isPreset=true`), mevcut Word'leri `level` raw'larına göre ilgili preset desteye bağlar. Level'ı nil olan Word'ler preset deste DIŞINDA kalır
-- [ ] `LexmindApp.swift` — modelContainer artık `Schema(versionedSchema: LexmindSchemaV2.self)` kullanır
+- [x] `Models/WordDeck.swift`: yeni `@Model final class WordDeck` — `id: UUID @unique`, `name: String`, `isPreset: Bool`, `presetLevelRaw: String?` (preset desteler için "A1".."C2", kullanıcı destelerinde nil), `createdAt: Date`, `sortOrder: Int`, `@Relationship words: [Word]` (many-to-many, no cascade delete)
+- [x] `Word.decks: [WordDeck]` inverse relationship. Cascade davranışı: deste silinince Word **silinmez** (sadece M:N bağ kalkar). Word silinince `deck.words`'ten otomatik çıkar
+- [x] `Models/LexmindSchema.swift`'e `LexmindSchemaV2: VersionedSchema` ekle — V1 6 model + WordDeck. `versionIdentifier = Schema.Version(2, 0, 0)`
+- [x] `LexmindMigrationPlan.stages` doldur: `.custom(fromVersion: LexmindSchemaV1.self, toVersion: LexmindSchemaV2.self, willMigrate: nil, didMigrate: { context in ... })`. `didMigrate` 6 preset deste oluşturur ("A1".."C2", `isPreset=true`), mevcut Word'leri `level` raw'larına göre ilgili preset desteye bağlar. Level'ı nil olan Word'ler preset deste DIŞINDA kalır
+- [x] `LexmindApp.swift` — modelContainer artık `Schema(versionedSchema: LexmindSchemaV2.self)` kullanır
 
 **LibraryImportView refaktör:**
-- [ ] Üst düzey "Hazır Desteler" listesi: A1, A2, B1, B2, C1, C2 — her destenin yanında kelime sayısı + "Bu desteyi ekle" butonu. Tek tıkla tüm A1 (10 kelime) / A2 (19) / B1 (17) / B2 (841) / C1 (1434) / C2 (72) import edilir
-- [ ] Mevcut chip filter UI'yi destenin içine girilince alt-detay olarak koru (tek tek seçim hâlâ mümkün)
-- [ ] `LibraryImporter.importWords`: import edilen Word otomatik olarak `level`'ına karşılık gelen preset `WordDeck`'e bağlanır (idempotent — duplikatta sadece eksik bağı ekler)
-- [ ] `OnboardingView` son sayfa: `preferredCEFRLevel`'a göre o seviyenin preset destesini öneri olarak öne çıkar (AppStorage artık sadece yazılmıyor, okunuyor)
+- [x] Üst düzey "Hazır Desteler" listesi: A1, A2, B1, B2, C1, C2 — her destenin yanında kelime sayısı + "Bu desteyi ekle" butonu (LazyVGrid tile'lar). Tek tıkla tüm A1 / A2 / B1 / B2 / C1 / C2 import edilir
+- [x] Mevcut chip filter UI'yi destenin altında koru (tek tek seçim hâlâ mümkün)
+- [x] `LibraryImporter.importWords`: import edilen Word otomatik olarak `level`'ına karşılık gelen preset `WordDeck`'e bağlanır (idempotent — `presetByLevel` map'inden lookup, candidate filter zaten duplicate'leri eliyor)
+- [ ] `OnboardingView` son sayfa: `preferredCEFRLevel`'a göre o seviyenin preset destesini öneri olarak öne çıkar (ileride; mevcut akış zaten kütüphane import'a yönlendiriyor)
 
 **Yeni Views:**
-- [ ] `Views/DecksView.swift`: RootTabView'ın 6. tab'ı. Üstte "Hazır Desteler" section (6 preset), altında "Kendi Destelerim" section. Plus butonu → "Yeni Deste" sheet (isim girişi → boş deste oluşturulur)
-- [ ] `Views/DeckDetailView.swift`: destenin içindeki kelimeler (WordsListView'in deck-scoped versiyonu). Toolbar: rename (sadece user-deck), kelime ekle/çıkar, "Bu desteyi çalış" → StudyView'i bu deck için aç
-- [ ] `RootTabView.swift`: 6. tab eklenir — `book.stack.fill` icon, label "Desteler". 5 → 6 tab geçişi UI sıkışıklığı testi gerektirir
+- [x] `Views/DecksView.swift`: RootTabView'ın 6. tab'ı. Üstte "Hazır Desteler" section (6 preset), altında "Kendi Destelerim" section. Plus toolbar menüsü → "Yeni Deste" sheet (isim girişi → boş deste) + "Desteleri Birleştir"
+- [x] `Views/DeckDetailView.swift`: destenin içindeki kelimeler. Toolbar + → AddWordsToDeckSheet (multi-select picker), swipe → "Çıkar" (membership-only). Alt safe-area "Bu Desteyi Çalış" butonu → StudyView'i bu deck için aç
+- [x] `RootTabView.swift`: 6. tab eklenir — `rectangle.stack.fill` icon, label "Desteler". TabView selection artık `@AppStorage("rootTabSelection")` ile persistent, deep-link routing için yazılabilir
 
 **Deck işlemleri (yalnız kullanıcı desteleri):**
-- [ ] Yeniden adlandır: swipe action veya context menu (preset'lerde disabled)
-- [ ] Sil: swipe action; içerdeki Word'lere dokunmaz, sadece M:N bağ silinir (preset'lerde disabled)
-- [ ] Birleştir: çoklu seçim toolbar → "Birleştir" → yeni isim girişi → yeni `WordDeck` oluşturulur, seçili destelerin tüm Word'leri yeni desteye bağlanır. Toggle: "Birleştirdikten sonra kaynak desteleri sil?" (default off). Preset desteler birleştirme kaynağı olabilir, hedef olamaz
+- [x] Yeniden adlandır: swipe action + context menu → RenameDeckSheet (mevcut isim prefilled, çakışma uyarısı). Preset'lerde menüler görünmez
+- [x] Sil: swipe action + context menu + confirm alert (içerdeki Word'lere dokunulmayacağı vurgulanıyor). Preset'ler dokunulmaz
+- [x] Birleştir: toolbar Menu → MergeDecksSheet. Multi-select kaynak (preset + user), yeni hedef ismi, benzersiz kelime sayacı, "Birleşim sonrası kaynak desteleri sil" toggle'ı (sadece user-deck kaynaklarını siler — preset'lere dokunmaz). Hedef her zaman yeni user deste
 
 **StudyView deck filter:**
-- [ ] Üstte `Menu`/`Picker` ile aktif deste seçimi (default: "Tümü"). `@AppStorage("activeDeckID")` ile son seçim hatırlanır
-- [ ] `buildQueue()` güncellemesi: aktif deste seçiliyse queue sadece `deck.words` içinden filter — mevcut due/new ayrımı korunur
-- [ ] DeckDetailView'dan tek tıkla "Bu desteyi çalış" → StudyView aktif deste prefilled
+- [x] Üstte `Menu` chip ile aktif deste seçimi (default: "Tümü"). `@AppStorage("activeDeckID")` ile son seçim hatırlanır
+- [x] `buildQueue()` güncellemesi: aktif deste seçiliyse queue `deck.words` içinden filter — due/new ayrımı korunur. `rebuildQueue()` deck değişince queue + current + revealed state'i temizler
+- [x] DeckDetailView'dan tek tıkla "Bu Desteyi Çalış" → StudyView aktif deste prefilled (`rootTabSelection` AppStorage'a yazılır, tab Çalış'a geçer)
 
 **HomeView:**
-- [ ] MVP: istatistikler global kalır (mevcut davranış korunur)
+- [x] MVP: istatistikler global kalır (mevcut davranış korunur)
 - [ ] Faz 2'de opsiyonel: "Aktif Deste" özet kartı
 
 **Testler:**
-- [ ] `LexmindTests/WordDeckTests.swift` (yeni): CRUD, M:N insert/remove, deste silindiğinde Word kalıyor, Word silindiğinde `deck.words`'ten otomatik çıkıyor
-- [ ] `LexmindTests/SwiftDataMigrationTests.swift` güncelle: V1 → V2 custom migration. Pre-migration V1 context'e Word'ler insert et (level=A1, B2 vs.), migrate, post-migration 6 preset deste oluşmuş ve Word'ler doğru desteye bağlanmış olmalı
-- [ ] `LexmindTests/LibraryImporterTests.swift` (yeni): import sonrası Word ilgili preset desteye bağlı, ikinci import idempotent
+- [x] `LexmindTests/WordDeckTests.swift` (yeni): CRUD, M:N insert/remove, deste silindiğinde Word kalıyor, Word silindiğinde `deck.words`'ten otomatik çıkıyor — 7 test
+- [x] `LexmindTests/SwiftDataMigrationTests.swift` güncelle: V2 schema metadata + v1ToV2 custom stage `didMigrate` round-trip exercise eden testler
+- [ ] `LexmindTests/LibraryImporterTests.swift` (yeni): import sonrası Word ilgili preset desteye bağlı, ikinci import idempotent — yazılacak
 
 **Notlar:**
 - Many-to-many CloudKit uyumluluğu (Faz 2.1): inverse mandatory olabilir — V2 tasarımında inverse zorunlu kuralım

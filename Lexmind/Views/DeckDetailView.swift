@@ -13,6 +13,8 @@ import SwiftData
 
 struct DeckDetailView: View {
     @Environment(\.modelContext) private var context
+    @AppStorage("activeDeckID") private var activeDeckIDRaw: String = ""
+    @AppStorage("rootTabSelection") private var rootTabSelection: Int = RootTab.home.rawValue
     @Bindable var deck: WordDeck
     @State private var searchText = ""
     @State private var showAddSheet = false
@@ -62,6 +64,13 @@ struct DeckDetailView: View {
         .searchable(text: $searchText, prompt: "Kelime ara")
         .navigationTitle(deck.name)
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if !deck.words.isEmpty {
+                studyDeckButton
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -74,6 +83,25 @@ struct DeckDetailView: View {
         .sheet(isPresented: $showAddSheet) {
             AddWordsToDeckSheet(deck: deck)
         }
+    }
+
+    private var studyDeckButton: some View {
+        Button {
+            studyThisDeck()
+        } label: {
+            Label("Bu Desteyi Çalış", systemImage: "brain.head.profile")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func studyThisDeck() {
+        activeDeckIDRaw = deck.id.uuidString
+        rootTabSelection = RootTab.study.rawValue
     }
 
     private func remove(_ word: Word) {
