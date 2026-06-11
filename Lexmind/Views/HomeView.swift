@@ -12,46 +12,11 @@ struct HomeView: View {
     @Query private var goals: [DailyGoal]
     @Query(sort: \ReviewLog.reviewedAt, order: .reverse) private var reviewLogs: [ReviewLog]
 
+    @State private var model = HomeModel()
     @State private var showAddWord = false
     @State private var showStudy = false
     @State private var showLibrary = false
     @State private var showReading = false
-
-    private var goal: DailyGoal {
-        goals.first ?? DailyGoal()
-    }
-
-    private func ensureGoalExists() {
-        guard goals.isEmpty else { return }
-        context.insert(DailyGoal())
-        try? context.save()
-    }
-
-    private var dueCount: Int {
-        words.filter { ($0.card?.isDue ?? true) }.count
-    }
-
-    private var newCount: Int {
-        words.filter { ($0.card?.state ?? .new) == .new }.count
-    }
-
-    private var reviewedTodayCount: Int {
-        let cal = Calendar.current
-        return reviewLogs.filter { cal.isDateInToday($0.reviewedAt) }.count
-    }
-
-    private var streak: Int {
-        guard !reviewLogs.isEmpty else { return 0 }
-        let cal = Calendar.current
-        var streakDays = 0
-        var cursor = Date()
-        let logsByDay = Dictionary(grouping: reviewLogs) { cal.startOfDay(for: $0.reviewedAt) }
-        while logsByDay[cal.startOfDay(for: cursor)] != nil {
-            streakDays += 1
-            cursor = cal.date(byAdding: .day, value: -1, to: cursor) ?? cursor
-        }
-        return streakDays
-    }
 
     var body: some View {
         NavigationStack {
@@ -61,11 +26,11 @@ struct HomeView: View {
                         emptyHeroCard
                     } else {
                         heroCard
-                        if reviewedTodayCount > 0 {
+                        if model.reviewedTodayCount > 0 {
                             readingCard
                         }
                         statsRow
-                        if !nextDueWords.isEmpty {
+                        if !model.nextDueWords.isEmpty {
                             upcomingSection
                         }
                     }
@@ -73,7 +38,13 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("Lexmind")
-            .onAppear(perform: ensureGoalExists)
+            .onAppear {
+                syncModel()
+                model.ensureGoalExists(in: context)
+            }
+            .onChange(of: words.count) { _, _ in syncModel() }
+            .onChange(of: goals.count) { _, _ in syncModel() }
+            .onChange(of: reviewLogs.count) { _, _ in syncModel() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -111,12 +82,8 @@ struct HomeView: View {
         }
     }
 
-    private var nextDueWords: [Word] {
-        words
-            .filter { $0.card != nil }
-            .sorted { ($0.card?.due ?? .now) < ($1.card?.due ?? .now) }
-            .prefix(5)
-            .map { $0 }
+    private func syncModel() {
+        model.sync(words: words, goals: goals, reviewLogs: reviewLogs)
     }
 
     private var emptyHeroCard: some View {
@@ -166,27 +133,27 @@ struct HomeView: View {
                 Image(systemName: "sun.max.fill")
                     .font(.title)
                     .foregroundStyle(.orange)
-                Text(greeting)
+                Text(model.greeting)
                     .font(.title2.bold())
                 Spacer()
             }
 
-            Text(dueCount > 0
-                 ? "Bugün gözden geçirilecek **\(dueCount)** kelimen var."
+            Text(model.dueCount > 0
+                 ? "Bugün gözden geçirilecek **\(model.dueCount)** kelimen var."
                  : "Bugünlük tüm tekrarlarını tamamladın 🎉")
                 .font(.body)
 
-            ProgressView(value: Double(reviewedTodayCount),
-                         total: Double(max(goal.reviewsPerDay, 1)))
+            ProgressView(value: Double(model.reviewedTodayCount),
+                         total: Double(max(model.goal.reviewsPerDay, 1)))
                 .tint(.accentColor)
 
             HStack {
-                Label("\(reviewedTodayCount)/\(goal.reviewsPerDay) tekrar",
+                Label("\(model.reviewedTodayCount)/\(model.goal.reviewsPerDay) tekrar",
                       systemImage: "checkmark.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Label("\(streak) gün serisi", systemImage: "flame.fill")
+                Label("\(model.streak) gün serisi", systemImage: "flame.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -194,7 +161,7 @@ struct HomeView: View {
             Button {
                 showStudy = true
             } label: {
-                Label(dueCount > 0 ? "Çalışmaya Başla" : "Yeni Kelime Öğren",
+                Label(model.dueCount > 0 ? "Çalışmaya Başla" : "Yeni Kelime Öğren",
                       systemImage: "play.fill")
                     .frame(maxWidth: .infinity)
             }
@@ -229,7 +196,7 @@ struct HomeView: View {
                     Text("Bugünün Okuma Metni")
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
-                    Text("Bugün çalıştığın \(reviewedTodayCount) tekrar üzerinden bağlamlı bir metin.")
+                    Text("Bugün çalıştığın \(model.reviewedTodayCount) tekrar üzerinden bağlamlı bir metin.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -253,8 +220,8 @@ struct HomeView: View {
     private var statsRow: some View {
         HStack(spacing: 12) {
             statCard(value: "\(words.count)", label: "Toplam", icon: "books.vertical.fill", tint: .blue)
-            statCard(value: "\(newCount)", label: "Yeni", icon: "sparkles", tint: .purple)
-            statCard(value: "\(dueCount)", label: "Bekleyen", icon: "clock.badge.exclamationmark", tint: .orange)
+            statCard(value: "\(model.newCount)", label: "Yeni", icon: "sparkles", tint: .purple)
+            statCard(value: "\(model.dueCount)", label: "Bekleyen", icon: "clock.badge.exclamationmark", tint: .orange)
         }
     }
 
@@ -277,7 +244,7 @@ struct HomeView: View {
     private var upcomingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Yaklaşan tekrarlar").font(.headline)
-            ForEach(nextDueWords) { word in
+            ForEach(model.nextDueWords) { word in
                 NavigationLink {
                     WordDetailView(word: word)
                 } label: {
@@ -309,16 +276,6 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)
         )
-    }
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: .now)
-        switch hour {
-        case 5..<12: return "Günaydın 👋"
-        case 12..<17: return "İyi günler 👋"
-        case 17..<22: return "İyi akşamlar 👋"
-        default: return "Merhaba 👋"
-        }
     }
 }
 
