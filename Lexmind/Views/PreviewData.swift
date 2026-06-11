@@ -11,7 +11,7 @@ enum PreviewData {
     static let container: ModelContainer = {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try! ModelContainer(
-            for: Word.self, FSRSCard.self, ReviewLog.self, DailyGoal.self, WordRelation.self, DailyReadingPassage.self,
+            for: Word.self, FSRSCard.self, ReviewLog.self, DailyGoal.self, WordRelation.self, DailyReadingPassage.self, WordDeck.self,
             configurations: config
         )
         let ctx = container.mainContext

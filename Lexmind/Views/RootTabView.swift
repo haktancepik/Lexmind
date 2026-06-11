@@ -17,6 +17,10 @@ struct RootTabView: View {
                 WordsListView()
             }
 
+            Tab("Desteler", systemImage: "rectangle.stack.fill") {
+                DecksView()
+            }
+
             Tab("Çalış", systemImage: "brain.head.profile") {
                 StudyView()
             }
