@@ -95,32 +95,77 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [x] `LexmindTests/SwiftDataMigrationTests.swift` — 5 smoke test: V1 version `1.0.0`, models listesi tam 6 element, plan sadece V1 içeriyor, stages şu an boş, in-memory container migration plan ile build oluyor + insert/fetch round-trip çalışıyor. Toplam test sayısı 17→22 (FSRS 17 + Migration 5)
 - Not: Gerçek V1→V2 lightweight migration testi V2 şeması yazıldığında eklenecek (şu an tek versiyon var)
 
-### 1.6 View Refactor (test edilebilirlik + bakım)
+### 1.6 Kullanıcı Desteleri (Decks)
+Şu an tüm Word'ler global tek bucket'ta — kullanıcı 2000+ kelimeli kütüphaneyi sade çalışamıyor. Hazır kütüphane CEFR seviyeli alt-destelere bölünür (A1/A2/B1/B2/C1/C2), kullanıcı kendi destelerini oluşturup adlandırabilir, birleştirebilir. 1.5'te kurulan migration plan iskeletinin gerçek ilk kullanımı (V1 → V2 custom migration).
+
+**Schema V2 (`LexmindSchemaV2`):**
+- [ ] `Models/WordDeck.swift`: yeni `@Model final class WordDeck` — `id: UUID @unique`, `name: String`, `isPreset: Bool`, `presetLevelRaw: String?` (preset desteler için "A1".."C2", kullanıcı destelerinde nil), `createdAt: Date`, `sortOrder: Int`, `@Relationship words: [Word]` (many-to-many, no cascade delete)
+- [ ] `Word.decks: [WordDeck]` inverse relationship. Cascade davranışı: deste silinince Word **silinmez** (sadece M:N bağ kalkar). Word silinince `deck.words`'ten otomatik çıkar
+- [ ] `Models/LexmindSchema.swift`'e `LexmindSchemaV2: VersionedSchema` ekle — V1 6 model + WordDeck. `versionIdentifier = Schema.Version(2, 0, 0)`
+- [ ] `LexmindMigrationPlan.stages` doldur: `.custom(fromVersion: LexmindSchemaV1.self, toVersion: LexmindSchemaV2.self, willMigrate: nil, didMigrate: { context in ... })`. `didMigrate` 6 preset deste oluşturur ("A1".."C2", `isPreset=true`), mevcut Word'leri `level` raw'larına göre ilgili preset desteye bağlar. Level'ı nil olan Word'ler preset deste DIŞINDA kalır
+- [ ] `LexmindApp.swift` — modelContainer artık `Schema(versionedSchema: LexmindSchemaV2.self)` kullanır
+
+**LibraryImportView refaktör:**
+- [ ] Üst düzey "Hazır Desteler" listesi: A1, A2, B1, B2, C1, C2 — her destenin yanında kelime sayısı + "Bu desteyi ekle" butonu. Tek tıkla tüm A1 (10 kelime) / A2 (19) / B1 (17) / B2 (841) / C1 (1434) / C2 (72) import edilir
+- [ ] Mevcut chip filter UI'yi destenin içine girilince alt-detay olarak koru (tek tek seçim hâlâ mümkün)
+- [ ] `LibraryImporter.importWords`: import edilen Word otomatik olarak `level`'ına karşılık gelen preset `WordDeck`'e bağlanır (idempotent — duplikatta sadece eksik bağı ekler)
+- [ ] `OnboardingView` son sayfa: `preferredCEFRLevel`'a göre o seviyenin preset destesini öneri olarak öne çıkar (AppStorage artık sadece yazılmıyor, okunuyor)
+
+**Yeni Views:**
+- [ ] `Views/DecksView.swift`: RootTabView'ın 6. tab'ı. Üstte "Hazır Desteler" section (6 preset), altında "Kendi Destelerim" section. Plus butonu → "Yeni Deste" sheet (isim girişi → boş deste oluşturulur)
+- [ ] `Views/DeckDetailView.swift`: destenin içindeki kelimeler (WordsListView'in deck-scoped versiyonu). Toolbar: rename (sadece user-deck), kelime ekle/çıkar, "Bu desteyi çalış" → StudyView'i bu deck için aç
+- [ ] `RootTabView.swift`: 6. tab eklenir — `book.stack.fill` icon, label "Desteler". 5 → 6 tab geçişi UI sıkışıklığı testi gerektirir
+
+**Deck işlemleri (yalnız kullanıcı desteleri):**
+- [ ] Yeniden adlandır: swipe action veya context menu (preset'lerde disabled)
+- [ ] Sil: swipe action; içerdeki Word'lere dokunmaz, sadece M:N bağ silinir (preset'lerde disabled)
+- [ ] Birleştir: çoklu seçim toolbar → "Birleştir" → yeni isim girişi → yeni `WordDeck` oluşturulur, seçili destelerin tüm Word'leri yeni desteye bağlanır. Toggle: "Birleştirdikten sonra kaynak desteleri sil?" (default off). Preset desteler birleştirme kaynağı olabilir, hedef olamaz
+
+**StudyView deck filter:**
+- [ ] Üstte `Menu`/`Picker` ile aktif deste seçimi (default: "Tümü"). `@AppStorage("activeDeckID")` ile son seçim hatırlanır
+- [ ] `buildQueue()` güncellemesi: aktif deste seçiliyse queue sadece `deck.words` içinden filter — mevcut due/new ayrımı korunur
+- [ ] DeckDetailView'dan tek tıkla "Bu desteyi çalış" → StudyView aktif deste prefilled
+
+**HomeView:**
+- [ ] MVP: istatistikler global kalır (mevcut davranış korunur)
+- [ ] Faz 2'de opsiyonel: "Aktif Deste" özet kartı
+
+**Testler:**
+- [ ] `LexmindTests/WordDeckTests.swift` (yeni): CRUD, M:N insert/remove, deste silindiğinde Word kalıyor, Word silindiğinde `deck.words`'ten otomatik çıkıyor
+- [ ] `LexmindTests/SwiftDataMigrationTests.swift` güncelle: V1 → V2 custom migration. Pre-migration V1 context'e Word'ler insert et (level=A1, B2 vs.), migrate, post-migration 6 preset deste oluşmuş ve Word'ler doğru desteye bağlanmış olmalı
+- [ ] `LexmindTests/LibraryImporterTests.swift` (yeni): import sonrası Word ilgili preset desteye bağlı, ikinci import idempotent
+
+**Notlar:**
+- Many-to-many CloudKit uyumluluğu (Faz 2.1): inverse mandatory olabilir — V2 tasarımında inverse zorunlu kuralım
+- Performance: 2000+ kelime × 6 preset deste M:N → SwiftData query maliyeti Instruments ile ölçülmeli
+- Preset deste isimleri sadece CEFR kodu ("A1".."C2"); tint renkleri (yeşil/mint/sarı/turuncu/kırmızı/mor) zaten seviye sinyali veriyor
+
+### 1.7 View Refactor (test edilebilirlik + bakım)
 - [ ] `StudyView` 596 → <250 satır: `@Observable StudySession` ayrı sınıf, `RatingButtons` + `LookupPopover` subview'lar
 - [ ] `WordDetailView` 625 → <300 satır: Header / Family / Relations / Examples / Notes section'lara böl
 - [ ] `LibraryImportView` 507 → <300 satır: `ProgressOverlay` ayrı component
 - [ ] Ortak `LookupPopover` 3 view'da kopyalanmış → tek component'e indir
 - [ ] `HomeView`'daki iş mantığını `@Observable HomeModel`'e taşı
 
-### 1.7 Observability — MetricKit + os.Logger
+### 1.8 Observability — MetricKit + os.Logger
 - [ ] `Lexmind/Services/Logging.swift`: subsystem bazlı `Logger` factory
 - [ ] Tüm services'lerde `print` ve sessiz catch'leri `Logger.error`'a çevir
 - [ ] `MXMetricManagerSubscriber` implementasyonu (LexmindApp seviyesinde)
 - [ ] Critical path'lere signpost: `LibraryImporter.import`, `FSRSScheduler.schedule`, `ReadingPassageGenerator.generate`
 
-### 1.8 String Catalog Altyapısı (sadece TR, EN sonra)
+### 1.9 String Catalog Altyapısı (sadece TR, EN sonra)
 - [ ] `Localizable.xcstrings` oluştur — TR-only doldur
 - [ ] `HomeView`, `StudyView`, `StatsView`, `SettingsView`, `OnboardingView` inline TR string'leri `String(localized:)` ile değiştir
 - [ ] Sonra: `AddWordView`, `WordDetailView`, `WordsListView`, `LibraryImportView`, `ReadingPassageView`, `RootTabView`
 - [ ] DataModels'deki `label` getter'ları
 - [ ] EN sütununu Faz 3'te doldur
 
-### 1.9 CI — Minimum
+### 1.10 CI — Minimum
 - [ ] `.github/workflows/ci.yml`: PR'da `xcodebuild test` çalıştır
 - [ ] SwiftLint config (`.swiftlint.yml`) + workflow step
 - [ ] README'ye build badge
 
-### 1.10 App Store Connect Hazırlığı
+### 1.11 App Store Connect Hazırlığı
 - [ ] App Store Connect'te app record (bundle ID, kategori: Education, age rating)
 - [ ] Marketing metadata (TR): app name, subtitle, açıklama, keywords, support URL
 - [ ] Privacy Policy URL + Terms of Use URL (basit statik sayfa — GitHub Pages yeter)
@@ -128,7 +173,7 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [ ] App Preview video (opsiyonel)
 - [ ] App icon 1024×1024 + tüm asset boyutları Assets.xcassets'te
 
-### 1.11 Faz 1 Çıkış Kriterleri
+### 1.12 Faz 1 Çıkış Kriterleri
 - [ ] Tüm yukarıdaki kutular tik
 - [ ] TestFlight build yüklenmiş, en az 1 internal tester en az 3 gün kullanmış
 - [ ] Crash-free session %100 (en az 3 gün)
