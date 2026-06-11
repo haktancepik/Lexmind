@@ -2,6 +2,11 @@
 //  StudyView.swift
 //  Lexmind
 //
+//  Top-level Study tab. Holds @Query data and ambient services
+//  (analyzer/verifier/lookup) and delegates queue + grade logic to
+//  `StudySession`, card chrome to `StudyPromptCard`/`StudyAnswerCard`,
+//  and bottom actions to `StudyRatingControls`.
+//
 
 import SwiftUI
 import SwiftData
@@ -15,16 +20,10 @@ struct StudyView: View {
     @Query private var goals: [DailyGoal]
     @Query(sort: \WordDeck.sortOrder) private var decks: [WordDeck]
 
-    /// Persisted selection for the active study deck.
     /// Empty string = "Tümü"; otherwise a `WordDeck.id` UUID string.
     @AppStorage("activeDeckID") private var activeDeckIDRaw: String = ""
 
-    @State private var queue: [Word] = []
-    @State private var current: Word?
-    @State private var revealed = false
-    @State private var sessionReviewed = 0
-    @State private var sessionStartedAt: Date = .now
-
+    @State private var session = StudySession()
     @State private var analyzer = WordAnalyzer()
     @State private var verifier = RelationVerifier()
     @State private var lookup: QuickLookupService?
@@ -35,11 +34,7 @@ struct StudyView: View {
     @State private var popoverError: String?
     @State private var existingTerms: Set<String> = []
 
-    private let scheduler = FSRSScheduler()
-
-    private var goal: DailyGoal {
-        goals.first ?? DailyGoal()
-    }
+    private var goal: DailyGoal { goals.first ?? DailyGoal() }
 
     private var activeDeck: WordDeck? {
         guard !activeDeckIDRaw.isEmpty,
@@ -47,40 +42,35 @@ struct StudyView: View {
         return decks.first { $0.id == uuid }
     }
 
-    /// Word pool that feeds the study queue. When a deck is active, only
-    /// its members are eligible — otherwise the full library is in play.
+    /// Word pool that feeds the study queue. When a deck is active,
+    /// only its members are eligible — otherwise the full library is.
     private var scopedWords: [Word] {
         if let deck = activeDeck { return deck.words }
         return words
     }
 
+    // MARK: - Body
+
     var body: some View {
         NavigationStack {
             Group {
-                if let word = current {
+                if let word = session.current {
                     studyCard(for: word)
-                } else if queue.isEmpty {
-                    emptyState
+                } else if session.queue.isEmpty {
+                    StudyEmptyState(
+                        sessionReviewed: session.sessionReviewed,
+                        activeDeck: activeDeck,
+                        onRequestReading: onRequestReading,
+                        onDismiss: { dismiss() },
+                        deckPicker: deckPicker
+                    )
                 }
             }
             .navigationTitle("Çalış")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Kapat") { dismiss() }
-                }
-                ToolbarItem(placement: .principal) {
-                    VStack {
-                        Text("\(sessionReviewed) tekrar")
-                            .font(.caption.bold())
-                        Text("\(queue.count) kaldı")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            .toolbar { toolbarContent }
             .onAppear {
-                buildQueue()
+                session.buildQueue(from: scopedWords, reviewLimit: goal.reviewsPerDay)
                 if lookup == nil {
                     lookup = QuickLookupService(analyzer: analyzer)
                 }
@@ -109,328 +99,75 @@ struct StudyView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            deckPicker
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.green)
-            Text("Harika iş! 🎉")
-                .font(.title2.bold())
-            Text(emptyStateMessage)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            if sessionReviewed > 0, onRequestReading != nil {
-                Button {
-                    let action = onRequestReading
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        action?()
-                    }
-                } label: {
-                    Label("Okuma Metni Oluştur", systemImage: "book.pages")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-
-            Button("Bitir") { dismiss() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Kapat") { dismiss() }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        ToolbarItem(placement: .principal) {
+            VStack {
+                Text("\(session.sessionReviewed) tekrar")
+                    .font(.caption.bold())
+                Text("\(session.queue.count) kaldı")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
+
+    // MARK: - Study card
 
     private func studyCard(for word: Word) -> some View {
         VStack(spacing: 16) {
-            deckPicker
+            deckPicker()
             progressBar
 
             ScrollView {
                 VStack(spacing: 20) {
-                    promptCard(word: word)
-                    if revealed {
-                        answerCard(word: word)
+                    StudyPromptCard(word: word, revealed: session.revealed)
+                    if session.revealed {
+                        StudyAnswerCard(
+                            word: word,
+                            termExists: termExists,
+                            onTokenTap: handleTokenTap
+                        )
                     }
                 }
                 .padding()
             }
 
-            controls(for: word)
+            StudyRatingControls(
+                word: word,
+                revealed: session.revealed,
+                session: session,
+                onReveal: { withAnimation(.spring) { session.reveal() } },
+                onRate: { rating in
+                    withAnimation { session.grade(rating, in: context) }
+                }
+            )
         }
         .task(id: word.term) {
             await enrichFamilyIfNeeded(for: word)
         }
     }
 
-    private func enrichFamilyIfNeeded(for word: Word) async {
-        guard analyzer.isAvailable else { return }
-        let needsFamily = word.familyRoot == nil
-            && word.familyMembers.isEmpty
-            && word.relations.isEmpty
-        guard needsFamily else { return }
-        do {
-            let result = try await analyzer.analyze(term: word.term)
-            try Task.checkCancellation()
-            word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
-            word.familyMembers = result.familyMembers.map { $0.lowercased() }
-            word.inflectionExamples = result.inflectionExamples
-            await verifier.applyVerifiedRelations(to: word, from: result)
-            try? context.save()
-        } catch {
-            // Silent — bir sonraki kart açılışında tekrar denenir.
-        }
-    }
-
-    private var emptyStateMessage: String {
-        if sessionReviewed > 0 {
-            return "Bu oturumda \(sessionReviewed) kelime gözden geçirdin."
-        }
-        if let deck = activeDeck {
-            return "\"\(deck.name)\" destesinde şu an çalışılacak bir şey yok."
-        }
-        return "Şu an çalışılacak bir şey yok."
-    }
-
-    private var deckPicker: some View {
-        let label = activeDeck?.name ?? "Tümü"
-        let icon: String = {
-            if activeDeck == nil { return "books.vertical.fill" }
-            return activeDeck?.isPreset == true ? "graduationcap.fill" : "rectangle.stack.fill"
-        }()
-        return Menu {
-            Button {
-                setActiveDeck(nil)
-            } label: {
-                Label("Tümü", systemImage: activeDeck == nil
-                      ? "checkmark"
-                      : "books.vertical")
-            }
-            if !decks.isEmpty {
-                Divider()
-                ForEach(decks) { deck in
-                    Button {
-                        setActiveDeck(deck)
-                    } label: {
-                        Label(deck.name,
-                              systemImage: activeDeck?.id == deck.id
-                                ? "checkmark"
-                                : (deck.isPreset ? "graduationcap" : "rectangle.stack"))
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                Text(label).font(.caption.bold())
-                Image(systemName: "chevron.down").font(.caption2)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.accentColor.opacity(0.12), in: Capsule())
-            .foregroundStyle(Color.accentColor)
-        }
-        .padding(.horizontal)
-    }
-
     private var progressBar: some View {
-        let total = max(queue.count + sessionReviewed, 1)
-        return ProgressView(value: Double(sessionReviewed),
+        let total = max(session.queue.count + session.sessionReviewed, 1)
+        return ProgressView(value: Double(session.sessionReviewed),
                             total: Double(total))
             .tint(.accentColor)
             .padding(.horizontal)
     }
 
-    private func promptCard(word: Word) -> some View {
-        VStack(spacing: 12) {
-            Text(word.displayName)
-                .font(.system(size: 44, weight: .bold, design: .serif))
-                .multilineTextAlignment(.center)
-            if revealed && !word.ipa.isEmpty {
-                Text(word.ipa)
-                    .font(.system(.title3, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(32)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(.regularMaterial)
+    private func deckPicker() -> StudyDeckPicker {
+        StudyDeckPicker(
+            decks: decks,
+            activeDeck: activeDeck,
+            onSelect: setActiveDeck
         )
     }
 
-    private func answerCard(word: Word) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                if !word.partOfSpeech.isEmpty {
-                    badge(word.partOfSpeech, color: .blue)
-                }
-                if !word.countability.isEmpty,
-                   word.countability.lowercased() != "n/a" {
-                    badge(word.countability, color: .purple)
-                }
-            }
-
-            if !word.turkishMeaning.isEmpty {
-                Text(word.turkishMeaning)
-                    .font(.title2.bold())
-            }
-            if !word.definition.isEmpty {
-                tappable(text: word.definition, baseUIColor: .secondaryLabel)
-            }
-
-            if !word.examples.isEmpty {
-                Divider().padding(.vertical, 4)
-                Text("Örnekler").font(.headline)
-                ForEach(Array(word.examples.enumerated()), id: \.offset) { idx, line in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("•")
-                        tappable(text: line,
-                                 highlightedTerm: word.term.lowercased(),
-                                 baseUIColor: .label)
-                    }
-                    .font(.callout)
-                }
-            }
-
-            if !word.inflectionExamples.isEmpty {
-                Divider().padding(.vertical, 4)
-                Text("Çekim Örnekleri").font(.headline)
-                ForEach(Array(word.inflectionExamples.enumerated()), id: \.offset) { idx, line in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("•")
-                        tappable(text: line,
-                                 highlightedTerm: word.familyRoot?.lowercased() ?? word.term.lowercased(),
-                                 baseUIColor: .label)
-                    }
-                    .font(.callout)
-                }
-            }
-
-            familySection(word: word)
-            relationsSection(word: word)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.regularMaterial)
-        )
-    }
-
-    @ViewBuilder
-    private func familySection(word: Word) -> some View {
-        let hasRoot = (word.familyRoot?.isEmpty == false)
-        let hasMembers = !word.familyMembers.isEmpty
-        if hasRoot || hasMembers {
-            Divider().padding(.vertical, 4)
-            Text("Kelime Ailesi").font(.headline)
-            VStack(alignment: .leading, spacing: 8) {
-                if let root = word.familyRoot, !root.isEmpty {
-                    HStack(spacing: 6) {
-                        Text("Kök:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button {
-                            handleTokenTap(root)
-                        } label: {
-                            Text(root)
-                                .font(.caption.bold())
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Color.accentColor.opacity(0.15), in: Capsule())
-                                .foregroundStyle(Color.accentColor)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if hasMembers {
-                    let verifiedSet = Set(word.familyMembersVerifiedRaw)
-                    relationChipsRow(items: word.familyMembers.map {
-                        (term: $0,
-                         origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
-                    })
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func relationsSection(word: Word) -> some View {
-        if !word.relations.isEmpty {
-            Divider().padding(.vertical, 4)
-            Text("Kelime Ağı").font(.headline)
-            let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(RelationKind.allCases) { kind in
-                    if let items = grouped[kind], !items.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(kind.label, systemImage: kind.symbol)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.secondary)
-                            relationChipsRow(items: sortedItems(items))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func sortedItems(_ relations: [WordRelation]) -> [(term: String, origin: RelationSource)] {
-        relations
-            .map { (term: $0.targetTerm, origin: $0.origin) }
-            .sorted { ($0.origin == .verified ? 0 : 1) < ($1.origin == .verified ? 0 : 1) }
-    }
-
-    private func relationChipsRow(items: [(term: String, origin: RelationSource)]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(items, id: \.term) { item in
-                    Button {
-                        handleTokenTap(item.term)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(item.term)
-                                .font(.caption.weight(.medium))
-                            Image(systemName: item.origin.symbol)
-                                .font(.caption2)
-                                .foregroundStyle(item.origin == .verified ? .green : .orange)
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                        .overlay(
-                            Capsule().stroke(
-                                item.origin == .verified
-                                    ? Color.green.opacity(0.5)
-                                    : Color.orange.opacity(0.35),
-                                style: StrokeStyle(
-                                    lineWidth: 1,
-                                    dash: item.origin == .verified ? [] : [3, 2]
-                                )
-                            )
-                        )
-                        .foregroundStyle(termExists(item.term) ? Color.accentColor : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func tappable(text: String,
-                          highlightedTerm: String? = nil,
-                          baseUIColor: UIColor) -> some View {
-        TappableText(
-            text: text,
-            highlightedTerm: highlightedTerm,
-            baseColor: baseUIColor,
-            onTokenTap: { term in handleTokenTap(term) }
-        )
-    }
+    // MARK: - Token lookup popover
 
     @ViewBuilder
     private func lookupCard(for term: String) -> some View {
@@ -529,151 +266,32 @@ struct StudyView: View {
         }
     }
 
-    private func badge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.caption.bold())
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
-    }
+    // MARK: - Family enrichment
 
-    @ViewBuilder
-    private func controls(for word: Word) -> some View {
-        if revealed {
-            HStack(spacing: 10) {
-                ForEach(ReviewRating.allCases, id: \.self) { rating in
-                    Button {
-                        grade(word: word, rating: rating)
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: rating.symbol)
-                            Text(rating.label).font(.caption.bold())
-                            Text(previewInterval(for: word, rating: rating))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(color(for: rating))
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 12)
-        } else {
-            Button {
-                withAnimation(.spring) { revealed = true }
-            } label: {
-                Label("Cevabı Göster", systemImage: "eye")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.horizontal)
-            .padding(.bottom, 12)
+    private func enrichFamilyIfNeeded(for word: Word) async {
+        guard analyzer.isAvailable else { return }
+        let needsFamily = word.familyRoot == nil
+            && word.familyMembers.isEmpty
+            && word.relations.isEmpty
+        guard needsFamily else { return }
+        do {
+            let result = try await analyzer.analyze(term: word.term)
+            try Task.checkCancellation()
+            word.familyRoot = result.familyRoot.isEmpty ? nil : result.familyRoot.lowercased()
+            word.familyMembers = result.familyMembers.map { $0.lowercased() }
+            word.inflectionExamples = result.inflectionExamples
+            await verifier.applyVerifiedRelations(to: word, from: result)
+            try? context.save()
+        } catch {
+            // Silent — bir sonraki kart açılışında tekrar denenir.
         }
     }
 
-    private func color(for rating: ReviewRating) -> Color {
-        switch rating {
-        case .again: return .red
-        case .hard: return .orange
-        case .good: return .green
-        case .easy: return .blue
-        }
-    }
-
-    private func previewInterval(for word: Word, rating: ReviewRating) -> String {
-        guard let card = word.card else { return "" }
-        let result = scheduler.schedule(card: card, rating: rating)
-        if result.scheduledDays <= 0 {
-            return previewMinutes(for: rating)
-        } else if result.scheduledDays < 1 {
-            return "<1g"
-        } else if result.scheduledDays < 30 {
-            return "\(Int(result.scheduledDays))g"
-        } else if result.scheduledDays < 365 {
-            return "\(Int(result.scheduledDays / 30))ay"
-        } else {
-            return "\(Int(result.scheduledDays / 365))y"
-        }
-    }
-
-    private func previewMinutes(for rating: ReviewRating) -> String {
-        switch rating {
-        case .again: return "1dk"
-        case .hard: return "6dk"
-        case .good: return "10dk"
-        case .easy: return "1g"
-        }
-    }
-
-    private func grade(word: Word, rating: ReviewRating) {
-        guard let card = word.card else { return }
-        let result = scheduler.schedule(card: card, rating: rating)
-        let log = ReviewLog(
-            rating: rating,
-            scheduledDays: result.scheduledDays,
-            elapsedDays: result.elapsedDays,
-            state: result.state
-        )
-        log.word = word
-        word.reviewLogs.append(log)
-        scheduler.apply(result: result, to: card)
-        word.lastStudiedAt = result.lastReview
-        sessionReviewed += 1
-        try? context.save()
-        advance()
-    }
-
-    private func advance() {
-        revealed = false
-        let finished = current
-        queue.removeAll { $0 === finished }
-        // Re-queue cards that are still due within the next 15 minutes (learning steps).
-        if let finished, let card = finished.card,
-           card.due <= Date().addingTimeInterval(15 * 60) {
-            queue.append(finished)
-        }
-        withAnimation {
-            current = queue.first
-        }
-    }
-
-    private func buildQueue() {
-        guard queue.isEmpty else { return }
-        let reviewLimit = max(goal.reviewsPerDay, 1)
-        let pool = scopedWords
-
-        let due = pool
-            .filter { ($0.card?.state ?? .new) != .new && ($0.card?.isDue ?? false) }
-            .sorted { ($0.card?.due ?? .now) < ($1.card?.due ?? .now) }
-            .prefix(reviewLimit)
-
-        let news = pool
-            .filter { ($0.card?.state ?? .new) == .new }
-            .sorted { $0.createdAt < $1.createdAt }
-
-        queue = Array(due) + Array(news)
-        sessionStartedAt = .now
-        current = queue.first
-    }
-
-    /// Called when the user switches active decks: clears the in-flight
-    /// queue (and on-screen card) and rebuilds against the new pool.
-    /// Session counters reset so progress reflects the new deck only.
-    private func rebuildQueue() {
-        queue.removeAll()
-        current = nil
-        revealed = false
-        sessionReviewed = 0
-        buildQueue()
-    }
+    // MARK: - Deck selection
 
     private func setActiveDeck(_ deck: WordDeck?) {
         activeDeckIDRaw = deck?.id.uuidString ?? ""
-        rebuildQueue()
+        session.rebuildQueue(from: scopedWords, reviewLimit: goal.reviewsPerDay)
     }
 }
 

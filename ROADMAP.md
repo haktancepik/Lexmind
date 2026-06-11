@@ -141,7 +141,7 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - Preset deste isimleri sadece CEFR kodu ("A1".."C2"); tint renkleri (yeşil/mint/sarı/turuncu/kırmızı/mor) zaten seviye sinyali veriyor
 
 ### 1.7 View Refactor (test edilebilirlik + bakım)
-- [ ] `StudyView` 596 → <250 satır: `@Observable StudySession` ayrı sınıf, `RatingButtons` + `LookupPopover` subview'lar
+- [x] `StudyView` 688 → 306 satır (hedef <250'ye ulaşılamadı — addFromPopover 50 satır iş mantığı orada kalmak zorunda, ama 55% küçüldü). Yeni dosyalar: `StudySession.swift` (@Observable — queue/grade/reveal/preview), `StudyAnswerCard.swift` (StudyPromptCard + StudyAnswerCard — prompt/answer + family/relations chips), `StudyRatingControls.swift` (reveal + rating row + interval color), `StudyDeckPicker.swift` (capsule menu), `StudyEmptyState.swift` (boş queue durumu)
 - [ ] `WordDetailView` 625 → <300 satır: Header / Family / Relations / Examples / Notes section'lara böl
 - [ ] `LibraryImportView` 507 → <300 satır: `ProgressOverlay` ayrı component
 - [ ] Ortak `LookupPopover` 3 view'da kopyalanmış → tek component'e indir
