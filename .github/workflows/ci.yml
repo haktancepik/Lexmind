@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve iOS simulator
+        id: sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available 'iPhone' | grep -E 'iPhone 16( Pro)?' | head -1 | sed -E 's/.*\((.*)\).*/\1/' | head -c 36)
+          echo "udid=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Test
+        run: |
+          xcodebuild test \
+            -project Lexmind.xcodeproj \
+            -scheme Lexmind \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_REQUIRED=NO
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint --reporter github-actions-logging

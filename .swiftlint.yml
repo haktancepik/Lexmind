@@ -1,0 +1,24 @@
+included:
+  - Lexmind
+  - LexmindTests
+  - LexmindUITests
+
+excluded:
+  - Lexmind/Resources
+  - Lexmind/Assets.xcassets
+  - .build
+
+disabled_rules:
+  - line_length
+  - trailing_whitespace
+  - todo
+  - identifier_name
+  - type_body_length
+  - file_length
+  - function_body_length
+  - cyclomatic_complexity
+  - nesting
+
+opt_in_rules:
+  - empty_count
+  - redundant_nil_coalescing

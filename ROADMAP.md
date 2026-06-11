@@ -161,9 +161,10 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [ ] EN sütununu Faz 3'te doldur
 
 ### 1.10 CI — Minimum
-- [ ] `.github/workflows/ci.yml`: PR'da `xcodebuild test` çalıştır
-- [ ] SwiftLint config (`.swiftlint.yml`) + workflow step
-- [ ] README'ye build badge
+- [x] `.github/workflows/ci.yml`: PR'da `xcodebuild test` çalıştır — `macos-latest` runner, iPhone 16 simulator UDID dinamik resolve ediliyor, `CODE_SIGNING_ALLOWED=NO` ile signing bypass (test target signing sorunu CI'da takılmasın); `concurrency` ile aynı ref üzerinde eski koşumlar iptal
+- [x] SwiftLint config (`.swiftlint.yml`) + workflow step — minimal config (line_length / trailing_whitespace / todo / identifier_name vs. disabled, empty_count + redundant_nil_coalescing opt-in). Ayrı job, `brew install swiftlint`, `--reporter github-actions-logging` (ilk PR'da yanlış pozitif kırmasın diye `--strict` kullanılmadı; tabloya bakıp ileride sıkılaştırılacak)
+- [x] README'ye build badge: `[![CI](.../actions/workflows/ci.yml/badge.svg)]`
+- Not: Workflow ilk push'tan sonra tetiklenecek; manuel adım — kullanıcı push'larsa Actions sekmesinden ilk koşumun çıktısı doğrulanmalı, gerekirse runner Xcode sürümü / simulator adı fine-tune edilir
 
 ### 1.11 App Store Connect Hazırlığı
 - [ ] App Store Connect'te app record (bundle ID, kategori: Education, age rating)
