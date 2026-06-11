@@ -3,9 +3,9 @@
 //  LexmindTests
 //
 //  Smoke tests for the versioned-schema setup in `LexmindSchema.swift`.
-//  These guard against accidental schema/migration regressions before V2
-//  exists; once a V2 lands, real V1 → V2 migration tests should be added
-//  alongside these.
+//  Covers V1 + V2 metadata, plan wiring, and a V1→V2 round-trip that
+//  exercises the `didMigrate` block — preset decks should be seeded and
+//  existing words should be bound to the deck matching their CEFR level.
 //
 
 import Testing
@@ -34,24 +34,38 @@ struct SwiftDataMigrationTests {
         ])
     }
 
-    // MARK: - SchemaMigrationPlan setup
-
-    @Test func migrationPlan_currentlyContainsOnlyV1() {
-        let names = LexmindMigrationPlan.schemas.map { String(describing: $0) }
-        #expect(names == ["LexmindSchemaV1"])
+    @Test func v2Schema_versionIs_2_0_0() {
+        #expect(LexmindSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
     }
 
-    @Test func migrationPlan_hasNoStagesYet() {
-        // Single-version plan needs no stages; once V2 ships this expectation
-        // should be updated to assert exactly one .lightweight (or .custom)
-        // stage describing the V1 → V2 transition.
-        #expect(LexmindMigrationPlan.stages.isEmpty)
+    @Test func v2Schema_addsWordDeck_toV1Models() {
+        let names = Set(LexmindSchemaV2.models.map { String(describing: $0) })
+        #expect(names == [
+            "Word",
+            "FSRSCard",
+            "ReviewLog",
+            "DailyGoal",
+            "WordRelation",
+            "DailyReadingPassage",
+            "WordDeck"
+        ])
+    }
+
+    // MARK: - SchemaMigrationPlan setup
+
+    @Test func migrationPlan_listsBothShippedSchemas() {
+        let names = LexmindMigrationPlan.schemas.map { String(describing: $0) }
+        #expect(names == ["LexmindSchemaV1", "LexmindSchemaV2"])
+    }
+
+    @Test func migrationPlan_hasExactlyOneStage() {
+        #expect(LexmindMigrationPlan.stages.count == 1)
     }
 
     // MARK: - Container wiring
 
-    @Test func v1Container_buildsWithMigrationPlan_andAcceptsInsert() throws {
-        let schema = Schema(versionedSchema: LexmindSchemaV1.self)
+    @Test func v2Container_buildsWithMigrationPlan_andAcceptsInsert() throws {
+        let schema = Schema(versionedSchema: LexmindSchemaV2.self)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true
@@ -63,12 +77,64 @@ struct SwiftDataMigrationTests {
         )
         let context = container.mainContext
 
-        let word = Word(term: "schemaCheck")
-        context.insert(word)
+        context.insert(Word(term: "schemaCheck"))
         try context.save()
 
         let fetched = try context.fetch(FetchDescriptor<Word>())
         #expect(fetched.count == 1)
         #expect(fetched.first?.term == "schemacheck")
+    }
+
+    // MARK: - V1 → V2 round-trip
+    //
+    // SwiftData runs the migration plan when a persistent store written
+    // with one VersionedSchema is opened under a newer one. We can't
+    // observe that path in-memory, but we *can* exercise `didMigrate`
+    // directly by handing it a V2 context pre-populated with V1-shaped
+    // data — that's where the preset-deck seeding logic lives.
+
+    @Test func v1ToV2_seedsSixPresetDecks_andBindsWordsByLevel() throws {
+        let schema = Schema(versionedSchema: LexmindSchemaV2.self)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true
+        )
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [configuration]
+        )
+        let context = container.mainContext
+
+        let apple = Word(term: "apple", level: .a1)
+        let book = Word(term: "book", level: .a2)
+        let science = Word(term: "science", level: .b2)
+        let untagged = Word(term: "ineffable", level: nil)
+        for w in [apple, book, science, untagged] { context.insert(w) }
+        try context.save()
+
+        guard case .custom(_, _, _, let didMigrate) = LexmindMigrationPlan.v1ToV2 else {
+            Issue.record("v1ToV2 stage is not .custom")
+            return
+        }
+        try didMigrate?(context)
+
+        let decks = try context.fetch(FetchDescriptor<WordDeck>())
+        #expect(decks.count == 6)
+        #expect(decks.allSatisfy { $0.isPreset })
+
+        var byLevel: [String: WordDeck] = [:]
+        for deck in decks {
+            if let raw = deck.presetLevelRaw {
+                byLevel[raw] = deck
+            }
+        }
+        #expect(byLevel["A1"]?.words.contains(where: { $0.term == "apple" }) == true)
+        #expect(byLevel["A2"]?.words.contains(where: { $0.term == "book" }) == true)
+        #expect(byLevel["B2"]?.words.contains(where: { $0.term == "science" }) == true)
+
+        let untaggedFetched = try context.fetch(FetchDescriptor<Word>(
+            predicate: #Predicate { $0.term == "ineffable" }
+        )).first
+        #expect(untaggedFetched?.decks.isEmpty == true)
     }
 }

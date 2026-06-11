@@ -199,6 +199,11 @@ final class Word {
     @Relationship(deleteRule: .cascade, inverse: \WordRelation.source)
     var relations: [WordRelation] = []
 
+    /// Many-to-many membership; inverse declared on `WordDeck.words`.
+    /// Default `.nullify` is intentional — deleting a deck must NOT delete
+    /// its words, and deleting a word must drop it from every deck.
+    var decks: [WordDeck] = []
+
     var level: CEFRLevel? {
         get { levelRaw.flatMap { CEFRLevel(rawValue: $0) } }
         set { levelRaw = newValue?.rawValue }

@@ -14,7 +14,7 @@ struct LexmindApp: App {
 
     init() {
         do {
-            let schema = Schema(versionedSchema: LexmindSchemaV1.self)
+            let schema = Schema(versionedSchema: LexmindSchemaV2.self)
             let configuration = ModelConfiguration(schema: schema)
             modelContainer = try ModelContainer(
                 for: schema,
