@@ -1,0 +1,80 @@
+//
+//  WordDetailHeader.swift
+//  Lexmind
+//
+//  Title + horizontally-scrolling tag row (POS, countability, FSRS
+//  state, CEFR level, topics) for the Word detail screen. Surfaces the
+//  in-flight regeneration spinner and an inline error message when AI
+//  analysis fails.
+//
+
+import SwiftUI
+
+struct WordDetailHeader: View {
+    let word: Word
+    let isRegenerating: Bool
+    let error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(word.displayName)
+                    .font(.system(.largeTitle, design: .serif, weight: .bold))
+                Spacer()
+                if isRegenerating {
+                    ProgressView()
+                }
+            }
+            tagRow
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var tagRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if !word.partOfSpeech.isEmpty {
+                    tag(word.partOfSpeech, color: .blue)
+                }
+                if !word.countability.isEmpty,
+                   word.countability.lowercased() != "n/a" {
+                    tag(word.countability, color: .purple)
+                }
+                if let state = word.card?.state {
+                    tag(state.label, color: .green)
+                }
+                if let lv = word.level {
+                    tag(lv.label, color: Self.cefrColor(lv))
+                }
+                ForEach(word.topics) { tp in
+                    Label(tp.label, systemImage: tp.symbol)
+                        .font(.caption2)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(.tertiary, in: Capsule())
+                }
+            }
+        }
+    }
+
+    private func tag(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(color)
+    }
+
+    static func cefrColor(_ level: CEFRLevel) -> Color {
+        switch level.tint {
+        case "green":  return .green
+        case "mint":   return .mint
+        case "yellow": return .yellow
+        case "orange": return .orange
+        case "red":    return .red
+        case "purple": return .purple
+        default:       return .accentColor
+        }
+    }
+}

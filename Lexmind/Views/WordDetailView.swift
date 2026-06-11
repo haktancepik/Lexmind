@@ -2,6 +2,13 @@
 //  WordDetailView.swift
 //  Lexmind
 //
+//  Top-level Word detail screen. Owns @Query/@Bindable state and the
+//  cross-card services (analyzer, verifier, lookup), and composes
+//  Header / Phonetics / Meaning / Examples / Inflection / Relations /
+//  Family / Notes / Schedule subviews. The lookup popover and the
+//  "add this term" confirmation flow live here because they straddle
+//  the whole screen.
+//
 
 import SwiftUI
 import SwiftData
@@ -27,19 +34,42 @@ struct WordDetailView: View {
     @State private var toastTask: Task<Void, Never>?
     @State private var existingTerms: Set<String> = []
 
+    // MARK: - Body
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                header
-                phoneticsCard
-                meaningCard
-                examplesCard
-                inflectionExamplesCard
-                relationsCard
-                familyCard
+                WordDetailHeader(
+                    word: word,
+                    isRegenerating: isRegenerating,
+                    error: error
+                )
+                WordDetailPhoneticsCard(word: word)
+                WordDetailMeaningCard(word: word, onTokenTap: handleTokenTap)
+                WordDetailExamplesCard(word: word, onTokenTap: handleTokenTap)
+                WordDetailInflectionExamplesCard(word: word, onTokenTap: handleTokenTap)
+                WordDetailRelationsCard(
+                    word: word,
+                    isRegenerating: isRegenerating,
+                    isVerifying: verifier.isVerifying,
+                    verifierError: verifier.lastError,
+                    termExists: termExists,
+                    onTermTap: handleTermTap,
+                    onRetryVerification: {
+                        Task { await verifier.retryVerification(for: word) }
+                    }
+                )
+                WordDetailFamilyCard(
+                    word: word,
+                    isRegenerating: isRegenerating,
+                    isVerifying: verifier.isVerifying,
+                    hasVerifierError: verifier.lastError != nil,
+                    termExists: termExists,
+                    onTermTap: handleTermTap
+                )
                 notesCard
                 if let card = word.card {
-                    scheduleCard(card: card)
+                    WordDetailScheduleCard(card: card)
                 }
             }
             .padding()
@@ -102,14 +132,10 @@ struct WordDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button {
-                        regenerate()
-                    } label: {
+                    Button { regenerate() } label: {
                         Label("AI ile Yeniden Analiz", systemImage: "sparkles")
                     }
-                    Button(role: .destructive) {
-                        delete()
-                    } label: {
+                    Button(role: .destructive) { delete() } label: {
                         Label("Sil", systemImage: "trash")
                     }
                 } label: {
@@ -119,132 +145,14 @@ struct WordDetailView: View {
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(word.displayName)
-                    .font(.system(.largeTitle, design: .serif, weight: .bold))
-                Spacer()
-                if isRegenerating {
-                    ProgressView()
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    if !word.partOfSpeech.isEmpty {
-                        tag(word.partOfSpeech, color: .blue)
-                    }
-                    if !word.countability.isEmpty,
-                       word.countability.lowercased() != "n/a" {
-                        tag(word.countability, color: .purple)
-                    }
-                    if let state = word.card?.state {
-                        tag(state.label, color: .green)
-                    }
-                    if let lv = word.level {
-                        tag(lv.label, color: cefrColor(lv))
-                    }
-                    ForEach(word.topics) { tp in
-                        Label(tp.label, systemImage: tp.symbol)
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(.tertiary, in: Capsule())
-                    }
-                }
-            }
-            if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
-            }
+    private var notesCard: some View {
+        WordDetailSectionCard(title: "Notlar", icon: "note.text") {
+            TextField("Kendi notunu yaz…", text: $word.notes, axis: .vertical)
+                .lineLimit(2...8)
         }
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.caption)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
-    }
-
-    private var phoneticsCard: some View {
-        sectionCard(title: "Telaffuz", icon: "waveform") {
-            if word.ipa.isEmpty {
-                Text("Henüz IPA eklenmedi.").foregroundStyle(.secondary)
-            } else {
-                Text(word.ipa)
-                    .font(.system(.title3, design: .monospaced))
-            }
-        }
-    }
-
-    private var meaningCard: some View {
-        sectionCard(title: "Anlam", icon: "text.bubble") {
-            if !word.turkishMeaning.isEmpty {
-                Text(word.turkishMeaning)
-                    .font(.title3.bold())
-            }
-            if !word.definition.isEmpty {
-                tappable(text: word.definition, baseUIColor: .secondaryLabel)
-                    .padding(.top, 4)
-            }
-            if word.turkishMeaning.isEmpty, word.definition.isEmpty {
-                Text("Anlam henüz eklenmedi.").foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var examplesCard: some View {
-        sectionCard(title: "Örnek Cümleler", icon: "quote.bubble") {
-            if word.examples.isEmpty {
-                Text("Örnek cümle yok.").foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(word.examples.enumerated()), id: \.offset) { idx, line in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(idx + 1)")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 18, alignment: .leading)
-                        tappable(text: line, highlightedTerm: word.term.lowercased(), baseUIColor: .label)
-                    }
-                    if idx < word.examples.count - 1 {
-                        Divider()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var inflectionExamplesCard: some View {
-        if !word.inflectionExamples.isEmpty {
-            sectionCard(title: "Çekim Örnekleri", icon: "arrow.triangle.branch") {
-                ForEach(Array(word.inflectionExamples.enumerated()), id: \.offset) { idx, line in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(idx + 1)")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 18, alignment: .leading)
-                        tappable(text: line, highlightedTerm: word.familyRoot?.lowercased() ?? word.term.lowercased(), baseUIColor: .label)
-                    }
-                    if idx < word.inflectionExamples.count - 1 {
-                        Divider()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func tappable(text: String, highlightedTerm: String? = nil, baseUIColor: UIColor) -> some View {
-        TappableText(
-            text: text,
-            highlightedTerm: highlightedTerm,
-            baseColor: baseUIColor,
-            onTokenTap: { term in
-                handleTokenTap(term)
-            }
-        )
-    }
+    // MARK: - Lookup popover
 
     @ViewBuilder
     private func lookupCard(for term: String) -> some View {
@@ -274,6 +182,19 @@ struct WordDetailView: View {
             Task { await lookup.fetchFromAI(term: term) }
         }
         activePopoverTerm = term
+    }
+
+    private func termExists(_ term: String) -> Bool {
+        existingTerms.contains(term.lowercased())
+    }
+
+    private func handleTermTap(_ term: String) {
+        let normalized = term.lowercased()
+        if termExists(normalized) {
+            navigationTerm = normalized
+        } else {
+            pendingAddTerm = normalized
+        }
     }
 
     private func addFromPopover(_ term: String) async {
@@ -310,208 +231,7 @@ struct WordDetailView: View {
         }
     }
 
-    private var notesCard: some View {
-        sectionCard(title: "Notlar", icon: "note.text") {
-            TextField("Kendi notunu yaz…", text: $word.notes, axis: .vertical)
-                .lineLimit(2...8)
-        }
-    }
-
-    @ViewBuilder
-    private var relationsCard: some View {
-        let showsLoading = word.relations.isEmpty && isRegenerating
-        if !word.relations.isEmpty || showsLoading {
-            sectionCard(title: "İlişkili Kelimeler", icon: "link", isWorking: verifier.isVerifying) {
-                if showsLoading {
-                    enrichLoadingRow(text: "İlişkiler yükleniyor…")
-                        .transition(.opacity)
-                } else {
-                    let grouped = Dictionary(grouping: word.relations, by: { $0.kind })
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let error = verifier.lastError, error.isRetryable {
-                            datamuseOfflineBadge(message: error.userMessage)
-                        } else if verifier.isVerifying {
-                            verifyingBadge
-                        }
-                        ForEach(RelationKind.allCases) { kind in
-                            if let items = grouped[kind], !items.isEmpty {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Label(kind.label, systemImage: kind.symbol)
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.secondary)
-                                    relationChipsRow(items: sortedItems(items))
-                                }
-                            }
-                        }
-                    }
-                    .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: word.relations.count)
-            .animation(.easeInOut(duration: 0.25), value: verifier.isVerifying)
-        }
-    }
-
-    private var verifyingBadge: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.mini)
-            Text("Doğrulanıyor…")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func enrichLoadingRow(text: String) -> some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func datamuseOfflineBadge(message: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "wifi.slash")
-                .font(.subheadline)
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(message)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("İlişkiler doğrulanamadı, AI önerileri gösteriliyor.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            Button {
-                Task { await verifier.retryVerification(for: word) }
-            } label: {
-                Label("Tekrar dene", systemImage: "arrow.clockwise")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .tint(.orange)
-        }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.orange.opacity(0.12))
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(message). İlişkiler doğrulanamadı.")
-    }
-
-    @ViewBuilder
-    private var familyCard: some View {
-        let hasRoot = (word.familyRoot?.isEmpty == false)
-        let hasMembers = !word.familyMembers.isEmpty
-        let showsLoading = !hasRoot && !hasMembers && isRegenerating
-        if hasRoot || hasMembers || showsLoading {
-            sectionCard(title: "Kelime Ailesi", icon: "person.3", isWorking: verifier.isVerifying) {
-                if showsLoading {
-                    enrichLoadingRow(text: "Kelime ailesi yükleniyor…")
-                        .transition(.opacity)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if verifier.isVerifying && verifier.lastError == nil {
-                            verifyingBadge
-                        }
-                        if let root = word.familyRoot, !root.isEmpty {
-                            HStack(spacing: 6) {
-                                Text("Kök:")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Button {
-                                    handleTermTap(root)
-                                } label: {
-                                    Text(root)
-                                        .font(.subheadline.bold())
-                                        .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        if hasMembers {
-                            let verifiedSet = Set(word.familyMembersVerifiedRaw)
-                            relationChipsRow(items: word.familyMembers.map {
-                                (term: $0,
-                                 origin: verifiedSet.contains($0.lowercased()) ? RelationSource.verified : .ai)
-                            })
-                        }
-                    }
-                    .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: word.familyMembers.count)
-            .animation(.easeInOut(duration: 0.25), value: verifier.isVerifying)
-        }
-    }
-
-    private func sortedItems(_ relations: [WordRelation]) -> [(term: String, origin: RelationSource)] {
-        relations
-            .map { (term: $0.targetTerm, origin: $0.origin) }
-            .sorted { ($0.origin == .verified ? 0 : 1) < ($1.origin == .verified ? 0 : 1) }
-    }
-
-    private func relationChipsRow(items: [(term: String, origin: RelationSource)]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(items, id: \.term) { item in
-                    Button {
-                        handleTermTap(item.term)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(item.term)
-                                .font(.caption.weight(.medium))
-                            Image(systemName: item.origin.symbol)
-                                .font(.caption2)
-                                .foregroundStyle(item.origin == .verified ? .green : .orange)
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                        .overlay(
-                            Capsule().stroke(
-                                item.origin == .verified
-                                    ? Color.green.opacity(0.5)
-                                    : (termExists(item.term)
-                                       ? Color.accentColor.opacity(0.4)
-                                       : Color.orange.opacity(0.35)),
-                                style: StrokeStyle(
-                                    lineWidth: 1,
-                                    dash: item.origin == .verified ? [] : [3, 2]
-                                )
-                            )
-                        )
-                        .foregroundStyle(termExists(item.term) ? Color.accentColor : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func termExists(_ term: String) -> Bool {
-        existingTerms.contains(term.lowercased())
-    }
-
-    private func handleTermTap(_ term: String) {
-        let normalized = term.lowercased()
-        if termExists(normalized) {
-            navigationTerm = normalized
-        } else {
-            pendingAddTerm = normalized
-        }
-    }
+    // MARK: - Add / enrich / regenerate / delete
 
     private func addWordFromTerm(_ term: String, openAfterAdd: Bool = true) async {
         if openAfterAdd {
@@ -561,66 +281,6 @@ struct WordDetailView: View {
             self.error = error.localizedDescription
             pendingAddTerm = nil
         }
-    }
-
-    private func cefrColor(_ level: CEFRLevel) -> Color {
-        switch level.tint {
-        case "green": return .green
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "orange": return .orange
-        case "red": return .red
-        case "purple": return .purple
-        default: return .accentColor
-        }
-    }
-
-    private func scheduleCard(card: FSRSCard) -> some View {
-        sectionCard(title: "FSRS Programı", icon: "clock.arrow.circlepath") {
-            VStack(alignment: .leading, spacing: 6) {
-                row("Durum", value: card.state.label)
-                row("Vade", value: card.due.formatted(date: .abbreviated, time: .shortened))
-                row("Kararlılık", value: String(format: "%.2f gün", card.stability))
-                row("Zorluk", value: String(format: "%.2f / 10", card.difficulty))
-                row("Tekrar", value: "\(card.reps)")
-                row("Unutma", value: "\(card.lapses)")
-            }
-        }
-    }
-
-    private func row(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).fontWeight(.medium)
-        }
-        .font(.subheadline)
-    }
-
-    private func sectionCard<Content: View>(title: String,
-                                            icon: String,
-                                            isWorking: Bool = false,
-                                            @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Label(title, systemImage: icon)
-                    .font(.headline)
-                if isWorking {
-                    ProgressView()
-                        .controlSize(.small)
-                        .transition(.opacity)
-                }
-                Spacer(minLength: 0)
-            }
-            .animation(.easeInOut(duration: 0.2), value: isWorking)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-        )
     }
 
     private func lazyEnrichIfNeeded() async {
