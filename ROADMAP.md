@@ -148,10 +148,10 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [x] `HomeView`'daki iş mantığını `@Observable HomeModel`'e taşı: yeni `HomeModel.swift` (@Observable, @MainActor) — `dueCount`/`newCount`/`reviewedTodayCount`/`streak`/`nextDueWords`/`greeting` derived metrikleri + `ensureGoalExists(in:)` mutation. HomeView 329 → 285 satır; @Query sonuçları `.onChange` ile `model.sync(...)` üzerinden enjekte ediliyor. Metrik formülleri artık SwiftUI host olmadan unit testlenebilir
 
 ### 1.8 Observability — MetricKit + os.Logger
-- [ ] `Lexmind/Services/Logging.swift`: subsystem bazlı `Logger` factory
-- [ ] Tüm services'lerde `print` ve sessiz catch'leri `Logger.error`'a çevir
-- [ ] `MXMetricManagerSubscriber` implementasyonu (LexmindApp seviyesinde)
-- [ ] Critical path'lere signpost: `LibraryImporter.import`, `FSRSScheduler.schedule`, `ReadingPassageGenerator.generate`
+- [x] `Lexmind/Services/Logging.swift`: subsystem bazlı `Logger` factory — `com.lexmind.app` subsystem, 8 kategori (`app`, `services.library`, `services.importer`, `services.ai`, `services.network`, `fsrs`, `data`, `metrics`) ve 3 `OSSignposter` (importer/fsrs/ai)
+- [x] Tüm services'lerde `print` ve sessiz catch'leri `Logger.error`'a çevir — CommonWordsLibrary/OxfordWordsLibrary `print` çağrıları `Log.library.fault/error` oldu (DEBUG-only kaldırıldı, Console'da prod'da da görünür); WordAnalyzer.analyze + streamQuick, ReadingPassageGenerator.generate + stream, DatamuseClient decode catch'leri `Log.ai.error` / `Log.network.error` log + throw; StudyView/WordDetailView'daki "Silent" yorumlu lazyEnrich catch'leri `Log.ai.error` (CancellationError ayrı kola alındı); LexmindApp ModelContainer init failure `Log.app.fault` + fatalError
+- [x] `MXMetricManagerSubscriber` implementasyonu (LexmindApp seviyesinde) — `Services/MetricKitObserver.swift` NSObject + protokol; LexmindApp init'te `metricObserver.start()` ile `MXMetricManager.shared.add(self)`; `didReceive(_ payloads: [MXMetricPayload])` günlük launch/hang/peakMem/cpuSeconds özetini `Log.metrics.info`'ya, `didReceive(_ payloads: [MXDiagnosticPayload])` crash/hang/cpu/disk diagnostic sayıları varsa `Log.metrics.fault`'a
+- [x] Critical path'lere signpost: `LibraryImporter.importWords` (total + per-batch save error log), `FSRSScheduler.schedule` (rating/state metadata), `ReadingPassageGenerator.generate` (kelime sayısı metadata). Instruments'te os_signpost track'inden chartable
 
 ### 1.9 String Catalog Altyapısı (sadece TR, EN sonra)
 - [ ] `Localizable.xcstrings` oluştur — TR-only doldur

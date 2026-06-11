@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import os
 
 private struct OxfordWordEntry: Decodable {
     let term: String
@@ -70,9 +71,7 @@ enum OxfordWordsLibrary {
 
     nonisolated private static func loadAll() -> [CommonWord] {
         guard let url = Bundle.main.url(forResource: "oxford5000", withExtension: "json") else {
-            #if DEBUG
-            print("[OxfordWordsLibrary] oxford5000.json not found in bundle")
-            #endif
+            Log.library.fault("oxford5000.json not found in bundle")
             return []
         }
         do {
@@ -80,9 +79,7 @@ enum OxfordWordsLibrary {
             let raw = try JSONDecoder().decode([OxfordWordEntry].self, from: data)
             return raw.compactMap(convert)
         } catch {
-            #if DEBUG
-            print("[OxfordWordsLibrary] Failed to load: \(error)")
-            #endif
+            Log.library.error("oxford5000.json decode failed: \(error.localizedDescription)")
             return []
         }
     }

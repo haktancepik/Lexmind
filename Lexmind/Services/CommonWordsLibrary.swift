@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import os
 
 struct LibraryRelation: Hashable {
     let term: String
@@ -106,9 +107,7 @@ enum CommonWordsLibrary {
 
     nonisolated private static func loadAll() -> [CommonWord] {
         guard let url = Bundle.main.url(forResource: "common", withExtension: "json") else {
-            #if DEBUG
-            print("[CommonWordsLibrary] common.json not found in bundle")
-            #endif
+            Log.library.fault("common.json not found in bundle")
             return []
         }
         do {
@@ -116,9 +115,7 @@ enum CommonWordsLibrary {
             let raw = try JSONDecoder().decode([CommonWordEntry].self, from: data)
             return raw.compactMap(convert)
         } catch {
-            #if DEBUG
-            print("[CommonWordsLibrary] Failed to load: \(error)")
-            #endif
+            Log.library.error("common.json decode failed: \(error.localizedDescription)")
             return []
         }
     }

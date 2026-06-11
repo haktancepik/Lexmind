@@ -5,6 +5,7 @@
 
 import Foundation
 import FoundationModels
+import os
 
 @Generable(description: "Detailed linguistic analysis of an English word")
 struct WordAnalysis: Equatable {
@@ -135,6 +136,7 @@ final class WordAnalyzer {
             )
             return response.content
         } catch {
+            Log.ai.error("analyze(\(term, privacy: .public)) failed: \(error.localizedDescription)")
             throw WordAnalyzerError.generationFailed(error.localizedDescription)
         }
     }
@@ -187,6 +189,7 @@ final class WordAnalyzer {
                     }
                     continuation.finish()
                 } catch {
+                    Log.ai.error("streamQuick(\(term, privacy: .public)) failed: \(error.localizedDescription)")
                     continuation.finish(throwing: WordAnalyzerError.generationFailed(error.localizedDescription))
                 }
             }

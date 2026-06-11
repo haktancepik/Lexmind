@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import os
 
 enum DatamuseError: Error, Equatable, Sendable {
     case offline
@@ -123,6 +124,7 @@ actor DatamuseClient {
                 let hits = try JSONDecoder().decode([Hit].self, from: data)
                 return .success(Set(hits.map { $0.word.lowercased() }))
             } catch {
+                Log.network.error("Datamuse decode failed: \(error.localizedDescription)")
                 return .failure(.invalidResponse)
             }
         } catch let urlError as URLError {

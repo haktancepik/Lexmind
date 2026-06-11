@@ -5,6 +5,7 @@
 
 import Foundation
 import FoundationModels
+import os
 
 @Generable(description: "A short coherent English reading passage practising a set of vocabulary words")
 struct ReadingPassageGeneration: Equatable {
@@ -65,6 +66,10 @@ final class ReadingPassageGenerator {
         let sample = Self.sampleRecent(words: words, limit: Self.maxWords)
         guard !sample.isEmpty else { throw ReadingPassageError.noWords }
 
+        let signpostID = Signpost.ai.makeSignpostID()
+        let state = Signpost.ai.beginInterval("generatePassage", id: signpostID, "words=\(sample.count)")
+        defer { Signpost.ai.endInterval("generatePassage", state) }
+
         let session = LanguageModelSession {
             "You are an English tutor writing graded readers for Turkish learners."
             "Write ONE coherent English passage (200-350 words) that naturally uses every word in the provided list. Inflected forms are allowed."
@@ -80,6 +85,7 @@ final class ReadingPassageGenerator {
             )
             return response.content
         } catch {
+            Log.ai.error("generatePassage failed: \(error.localizedDescription)")
             throw ReadingPassageError.generationFailed(error.localizedDescription)
         }
     }
@@ -112,6 +118,7 @@ final class ReadingPassageGenerator {
                     }
                     continuation.finish()
                 } catch {
+                    Log.ai.error("streamPassage failed: \(error.localizedDescription)")
                     continuation.finish(throwing: ReadingPassageError.generationFailed(error.localizedDescription))
                 }
             }

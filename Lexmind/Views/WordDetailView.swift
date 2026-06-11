@@ -12,6 +12,7 @@
 
 import SwiftUI
 import SwiftData
+import os
 
 struct WordDetailView: View {
     @Environment(\.modelContext) private var context
@@ -315,7 +316,9 @@ struct WordDetailView: View {
             }
             try? context.save()
         } catch {
-            // Silent fail — stub stays, user can tap Regenerate or come back later.
+            // Stub stays; user can tap Regenerate or come back later. Log
+            // so we know how often background enrichment fails in the wild.
+            Log.ai.error("lazyEnrichIfNeeded(\(word.term, privacy: .public)) failed: \(error.localizedDescription)")
         }
     }
 

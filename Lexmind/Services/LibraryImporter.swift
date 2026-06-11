@@ -9,6 +9,7 @@
 
 import Foundation
 import SwiftData
+import os
 
 @ModelActor
 actor LibraryImporter {
@@ -47,11 +48,16 @@ actor LibraryImporter {
         batchSize: Int = 100,
         progress: @Sendable @MainActor (Int, String) -> Void
     ) async throws -> ImportResult {
+        let signpostID = Signpost.importer.makeSignpostID()
+        let state = Signpost.importer.beginInterval("importWords", id: signpostID, "total=\(words.count)")
+        defer { Signpost.importer.endInterval("importWords", state) }
+
         let existing = (try? modelContext.fetch(FetchDescriptor<Word>())) ?? []
         let existingSet = Set(existing.map { $0.term.lowercased() })
 
         let candidates = words.filter { !existingSet.contains($0.term.lowercased()) }
         guard !candidates.isEmpty else {
+            Log.importer.info("importWords skipped — 0 candidates after dedupe (input=\(words.count))")
             return ImportResult(added: 0, cancelled: false)
         }
 
@@ -153,6 +159,7 @@ actor LibraryImporter {
                 do {
                     try modelContext.save()
                 } catch {
+                    Log.importer.error("batch save failed at index=\(index), inserted=\(insertedInBatch): \(error.localizedDescription)")
                     modelContext.rollback()
                     throw error
                 }
@@ -167,6 +174,7 @@ actor LibraryImporter {
             index = end
         }
 
+        Log.importer.info("importWords done — added=\(added), totalInput=\(words.count)")
         return ImportResult(added: added, cancelled: false)
     }
 }

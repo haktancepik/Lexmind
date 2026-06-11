@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import os
 
 struct FSRSParameters {
     var w: [Double] = [
@@ -103,6 +104,10 @@ struct FSRSScheduler {
     }
 
     func schedule(card: FSRSCard, rating: ReviewRating, now: Date = .now) -> ScheduleResult {
+        let signpostID = Signpost.fsrs.makeSignpostID()
+        let signpostState = Signpost.fsrs.beginInterval("schedule", id: signpostID, "rating=\(rating.rawValue), state=\(card.state.rawValue)")
+        defer { Signpost.fsrs.endInterval("schedule", signpostState) }
+
         let elapsed: Double
         if let last = card.lastReview {
             elapsed = max(0, now.timeIntervalSince(last) / 86_400)

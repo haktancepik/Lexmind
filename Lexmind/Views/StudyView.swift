@@ -10,6 +10,7 @@
 
 import SwiftUI
 import SwiftData
+import os
 
 struct StudyView: View {
     var onRequestReading: (() -> Void)? = nil
@@ -275,8 +276,10 @@ struct StudyView: View {
             word.inflectionExamples = result.inflectionExamples
             await verifier.applyVerifiedRelations(to: word, from: result)
             try? context.save()
+        } catch is CancellationError {
+            // Expected when the user advances to the next card mid-flight.
         } catch {
-            // Silent — bir sonraki kart açılışında tekrar denenir.
+            Log.ai.error("lazyEnrichIfNeeded(\(word.term, privacy: .public)) failed: \(error.localizedDescription)")
         }
     }
 
