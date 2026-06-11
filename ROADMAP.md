@@ -133,7 +133,7 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 **Testler:**
 - [x] `LexmindTests/WordDeckTests.swift` (yeni): CRUD, M:N insert/remove, deste silindiğinde Word kalıyor, Word silindiğinde `deck.words`'ten otomatik çıkıyor — 7 test
 - [x] `LexmindTests/SwiftDataMigrationTests.swift` güncelle: V2 schema metadata + v1ToV2 custom stage `didMigrate` round-trip exercise eden testler
-- [ ] `LexmindTests/LibraryImporterTests.swift` (yeni): import sonrası Word ilgili preset desteye bağlı, ikinci import idempotent — yazılacak
+- [x] `LexmindTests/LibraryImporterTests.swift` (yeni): 10 test — preset deck binding (A1/A2/B2 router, levelless → unbound, preset yoksa crashe etmez), idempotency (ikinci import 0 ekler, FSRSCard + WordRelation duplicate olmaz, karışık payload sadece yenileri alır), edge cases (empty payload progress fire etmez, batchSize=1 ile progress running total raporlar)
 
 **Notlar:**
 - Many-to-many CloudKit uyumluluğu (Faz 2.1): inverse mandatory olabilir — V2 tasarımında inverse zorunlu kuralım
