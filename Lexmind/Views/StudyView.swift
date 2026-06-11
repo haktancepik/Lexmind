@@ -13,6 +13,11 @@ struct StudyView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var words: [Word]
     @Query private var goals: [DailyGoal]
+    @Query(sort: \WordDeck.sortOrder) private var decks: [WordDeck]
+
+    /// Persisted selection for the active study deck.
+    /// Empty string = "Tümü"; otherwise a `WordDeck.id` UUID string.
+    @AppStorage("activeDeckID") private var activeDeckIDRaw: String = ""
 
     @State private var queue: [Word] = []
     @State private var current: Word?
@@ -34,6 +39,19 @@ struct StudyView: View {
 
     private var goal: DailyGoal {
         goals.first ?? DailyGoal()
+    }
+
+    private var activeDeck: WordDeck? {
+        guard !activeDeckIDRaw.isEmpty,
+              let uuid = UUID(uuidString: activeDeckIDRaw) else { return nil }
+        return decks.first { $0.id == uuid }
+    }
+
+    /// Word pool that feeds the study queue. When a deck is active, only
+    /// its members are eligible — otherwise the full library is in play.
+    private var scopedWords: [Word] {
+        if let deck = activeDeck { return deck.words }
+        return words
     }
 
     var body: some View {
@@ -93,14 +111,13 @@ struct StudyView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
+            deckPicker
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.green)
             Text("Harika iş! 🎉")
                 .font(.title2.bold())
-            Text(sessionReviewed > 0
-                 ? "Bu oturumda \(sessionReviewed) kelime gözden geçirdin."
-                 : "Şu an çalışılacak bir şey yok.")
+            Text(emptyStateMessage)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -129,6 +146,7 @@ struct StudyView: View {
 
     private func studyCard(for word: Word) -> some View {
         VStack(spacing: 16) {
+            deckPicker
             progressBar
 
             ScrollView {
@@ -165,6 +183,57 @@ struct StudyView: View {
         } catch {
             // Silent — bir sonraki kart açılışında tekrar denenir.
         }
+    }
+
+    private var emptyStateMessage: String {
+        if sessionReviewed > 0 {
+            return "Bu oturumda \(sessionReviewed) kelime gözden geçirdin."
+        }
+        if let deck = activeDeck {
+            return "\"\(deck.name)\" destesinde şu an çalışılacak bir şey yok."
+        }
+        return "Şu an çalışılacak bir şey yok."
+    }
+
+    private var deckPicker: some View {
+        let label = activeDeck?.name ?? "Tümü"
+        let icon: String = {
+            if activeDeck == nil { return "books.vertical.fill" }
+            return activeDeck?.isPreset == true ? "graduationcap.fill" : "rectangle.stack.fill"
+        }()
+        return Menu {
+            Button {
+                setActiveDeck(nil)
+            } label: {
+                Label("Tümü", systemImage: activeDeck == nil
+                      ? "checkmark"
+                      : "books.vertical")
+            }
+            if !decks.isEmpty {
+                Divider()
+                ForEach(decks) { deck in
+                    Button {
+                        setActiveDeck(deck)
+                    } label: {
+                        Label(deck.name,
+                              systemImage: activeDeck?.id == deck.id
+                                ? "checkmark"
+                                : (deck.isPreset ? "graduationcap" : "rectangle.stack"))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                Text(label).font(.caption.bold())
+                Image(systemName: "chevron.down").font(.caption2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.accentColor.opacity(0.12), in: Capsule())
+            .foregroundStyle(Color.accentColor)
+        }
+        .padding(.horizontal)
     }
 
     private var progressBar: some View {
@@ -575,19 +644,36 @@ struct StudyView: View {
     private func buildQueue() {
         guard queue.isEmpty else { return }
         let reviewLimit = max(goal.reviewsPerDay, 1)
+        let pool = scopedWords
 
-        let due = words
+        let due = pool
             .filter { ($0.card?.state ?? .new) != .new && ($0.card?.isDue ?? false) }
             .sorted { ($0.card?.due ?? .now) < ($1.card?.due ?? .now) }
             .prefix(reviewLimit)
 
-        let news = words
+        let news = pool
             .filter { ($0.card?.state ?? .new) == .new }
             .sorted { $0.createdAt < $1.createdAt }
 
         queue = Array(due) + Array(news)
         sessionStartedAt = .now
         current = queue.first
+    }
+
+    /// Called when the user switches active decks: clears the in-flight
+    /// queue (and on-screen card) and rebuilds against the new pool.
+    /// Session counters reset so progress reflects the new deck only.
+    private func rebuildQueue() {
+        queue.removeAll()
+        current = nil
+        revealed = false
+        sessionReviewed = 0
+        buildQueue()
+    }
+
+    private func setActiveDeck(_ deck: WordDeck?) {
+        activeDeckIDRaw = deck?.id.uuidString ?? ""
+        rebuildQueue()
     }
 }
 
