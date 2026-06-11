@@ -2,34 +2,14 @@
 //  LibraryImportView.swift
 //  Lexmind
 //
+//  Top-level "Hazır Kütüphane" sheet. Owns @Query state, the import
+//  Task, and the result alert; defers preset-deck tiles, filter chips,
+//  word rows, and the in-flight progress overlay to small focused
+//  subviews.
+//
 
 import SwiftUI
 import SwiftData
-
-private enum MergedLibrary {
-    static let all: [CommonWord] = {
-        var seen = Set<String>()
-        var merged: [CommonWord] = []
-        merged.reserveCapacity(CommonWordsLibrary.all.count + OxfordWordsLibrary.all.count)
-        for word in CommonWordsLibrary.all + OxfordWordsLibrary.all {
-            let key = word.term.lowercased()
-            if seen.insert(key).inserted {
-                merged.append(word)
-            }
-        }
-        return merged
-    }()
-
-    static let allTermSet: Set<String> = Set(all.map { $0.term.lowercased() })
-
-    static func filtered(level: CEFRLevel?, topic: WordTopic?) -> [CommonWord] {
-        all.filter { word in
-            if let level, word.level != level { return false }
-            if let topic, !word.topics.contains(topic) { return false }
-            return true
-        }
-    }
-}
 
 struct LibraryImportView: View {
     @Environment(\.modelContext) private var context
@@ -46,17 +26,13 @@ struct LibraryImportView: View {
     @State private var topicFilter: WordTopic? = nil
     @State private var recentlyAdded: Set<String> = []
     @State private var importErrorMessage: String?
-    @State private var importProgress: ImportProgress?
+    @State private var importProgress: LibraryImportProgress?
     @State private var importTask: Task<Void, Never>?
     @State private var importCancelled: Bool = false
     @State private var existingTerms: Set<String> = []
     @State private var librariesReady: Bool = false
 
-    private struct ImportProgress: Equatable {
-        var total: Int
-        var done: Int
-        var currentTerm: String
-    }
+    // MARK: - Derived state
 
     private func refreshExistingTerms() {
         existingTerms = Set(existingWords.map { $0.term.lowercased() })
@@ -74,9 +50,19 @@ struct LibraryImportView: View {
         return base
     }
 
-    private var newWordsCount: Int {
-        MergedLibrary.all.filter { !existingTerms.contains($0.term.lowercased()) }.count
+    private var visibleNewCount: Int {
+        filtered.filter { !existingTerms.contains($0.term.lowercased()) }.count
     }
+
+    private func groupedByLevel(_ list: [CommonWord]) -> [(CEFRLevel, [CommonWord])] {
+        let groups = Dictionary(grouping: list, by: { $0.level })
+        return CEFRLevel.allCases.compactMap { level in
+            guard let words = groups[level], !words.isEmpty else { return nil }
+            return (level, words)
+        }
+    }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -89,43 +75,21 @@ struct LibraryImportView: View {
             }
             .navigationTitle("Hazır Kütüphane")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Kapat") { dismiss() }
-                        .disabled(importTask != nil)
-                }
-                if librariesReady {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            importVisible()
-                        } label: {
-                            Label("Hepsini Ekle (\(visibleNewCount))",
-                                  systemImage: "tray.and.arrow.down.fill")
-                        }
-                        .disabled(visibleNewCount == 0 || importTask != nil)
-                    }
-                }
-            }
+            .toolbar { toolbarContent }
             .alert(importErrorMessage == nil ? "İçe aktarıldı" : "Hata",
                    isPresented: $showResult) {
                 Button("Tamam", role: .cancel) { }
             } message: {
-                if let err = importErrorMessage {
-                    Text("Kaydedilemedi: \(err)")
-                } else if importedCount == 0 {
-                    Text(importCancelled
-                         ? "İşlem iptal edildi, kelime eklenmedi."
-                         : "Yeni kelime eklenmedi (hepsi zaten listende).")
-                } else {
-                    Text(importCancelled
-                         ? "\(importedCount) kelime eklendi, işlem yarıda durduruldu."
-                         : "\(importedCount) kelime kütüphaneye eklendi.")
-                }
+                resultAlertMessage
             }
             .interactiveDismissDisabled(importTask != nil)
             .overlay {
                 if let progress = importProgress {
-                    importProgressOverlay(progress)
+                    LibraryImportProgressOverlay(
+                        progress: progress,
+                        canCancel: importTask != nil,
+                        onCancel: { importTask?.cancel() }
+                    )
                 }
             }
             .onAppear {
@@ -146,24 +110,63 @@ struct LibraryImportView: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Kapat") { dismiss() }
+                .disabled(importTask != nil)
+        }
+        if librariesReady {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    importVisible()
+                } label: {
+                    Label("Hepsini Ekle (\(visibleNewCount))",
+                          systemImage: "tray.and.arrow.down.fill")
+                }
+                .disabled(visibleNewCount == 0 || importTask != nil)
+            }
+        }
+    }
+
     @ViewBuilder
+    private var resultAlertMessage: some View {
+        if let err = importErrorMessage {
+            Text("Kaydedilemedi: \(err)")
+        } else if importedCount == 0 {
+            Text(importCancelled
+                 ? "İşlem iptal edildi, kelime eklenmedi."
+                 : "Yeni kelime eklenmedi (hepsi zaten listende).")
+        } else {
+            Text(importCancelled
+                 ? "\(importedCount) kelime eklendi, işlem yarıda durduruldu."
+                 : "\(importedCount) kelime kütüphaneye eklendi.")
+        }
+    }
+
+    // MARK: - List
+
     private var libraryList: some View {
         List {
             Section {
-                summaryRow
+                LibraryImportSummaryRow(existingTerms: existingTerms)
             }
-
             Section("Hazır Desteler") {
-                presetDecksGrid
-                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                LibraryImportPresetDecks(
+                    existingTerms: existingTerms,
+                    isImporting: importTask != nil,
+                    onTapLevel: { words in importLevel(words) }
+                )
+                .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
             }
-
             Section {
-                filterChips
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                    .listRowBackground(Color.clear)
+                LibraryImportFilterChips(
+                    levelFilter: $levelFilter,
+                    topicFilter: $topicFilter
+                )
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowBackground(Color.clear)
             }
-
             if filtered.isEmpty {
                 Section("Kelimeler (0)") {
                     Text("Eşleşen kelime bulunamadı.")
@@ -173,10 +176,22 @@ struct LibraryImportView: View {
                 ForEach(groupedByLevel(filtered), id: \.0) { level, words in
                     Section {
                         ForEach(words) { word in
-                            row(for: word)
+                            let key = word.term.lowercased()
+                            LibraryImportWordRow(
+                                word: word,
+                                alreadyAdded: existingTerms.contains(key),
+                                justAdded: recentlyAdded.contains(key),
+                                onAdd: { addSingle($0) }
+                            )
                         }
                     } header: {
-                        levelSectionHeader(level: level, words: words)
+                        LibraryImportLevelSectionHeader(
+                            level: level,
+                            words: words,
+                            existingTerms: existingTerms,
+                            isImporting: importTask != nil,
+                            onImport: { importLevel($0) }
+                        )
                     }
                 }
             }
@@ -195,306 +210,7 @@ struct LibraryImportView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    @ViewBuilder
-    private func importProgressOverlay(_ progress: ImportProgress) -> some View {
-        ZStack {
-            Color.black.opacity(0.25)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { }
-            VStack(spacing: 14) {
-                Text("Kelimeler ekleniyor…")
-                    .font(.headline)
-                ProgressView(value: Double(progress.done),
-                             total: Double(max(progress.total, 1)))
-                    .progressViewStyle(.linear)
-                    .tint(.accentColor)
-                    .animation(.linear(duration: 0.15), value: progress.done)
-                Text("\(progress.done) / \(progress.total) kelime")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                if !progress.currentTerm.isEmpty {
-                    Text(progress.currentTerm)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-                Button(role: .destructive) {
-                    importTask?.cancel()
-                } label: {
-                    Label("İptal", systemImage: "xmark.circle")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .padding(.top, 4)
-                .disabled(importTask == nil)
-            }
-            .padding(20)
-            .frame(maxWidth: 320)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.regularMaterial)
-            )
-            .shadow(radius: 12)
-            .padding(.horizontal, 32)
-        }
-        .transition(.opacity)
-    }
-
-    private var filterChips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(CEFRLevel.allCases) { lv in
-                        chip(
-                            title: lv.label,
-                            symbol: "graduationcap",
-                            isSelected: levelFilter == lv,
-                            tint: cefrColor(lv)
-                        ) {
-                            levelFilter = (levelFilter == lv) ? nil : lv
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(WordTopic.allCases) { tp in
-                        chip(
-                            title: tp.label,
-                            symbol: tp.symbol,
-                            isSelected: topicFilter == tp,
-                            tint: .accentColor
-                        ) {
-                            topicFilter = (topicFilter == tp) ? nil : tp
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-    }
-
-    private func chip(title: String,
-                      symbol: String,
-                      isSelected: Bool,
-                      tint: Color,
-                      action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? tint.opacity(0.2) : Color(.tertiarySystemFill))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? tint : .clear, lineWidth: 1)
-                )
-                .foregroundStyle(isSelected ? tint : Color.primary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func cefrColor(_ level: CEFRLevel) -> Color {
-        switch level.tint {
-        case "green": return .green
-        case "mint": return .mint
-        case "yellow": return .yellow
-        case "orange": return .orange
-        case "red": return .red
-        case "purple": return .purple
-        default: return .accentColor
-        }
-    }
-
-    private var presetDecksGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 8),
-                      GridItem(.flexible(), spacing: 8),
-                      GridItem(.flexible(), spacing: 8)],
-            spacing: 8
-        ) {
-            ForEach(CEFRLevel.allCases) { lv in
-                presetDeckTile(for: lv)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func presetDeckTile(for level: CEFRLevel) -> some View {
-        let words = MergedLibrary.filtered(level: level, topic: nil)
-        let newCount = self.newCount(in: words)
-        let tint = cefrColor(level)
-        Button {
-            importLevel(words)
-        } label: {
-            VStack(spacing: 4) {
-                Text(level.label)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(tint)
-                Text("\(words.count) kelime")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(newCount == 0 ? "Tamamlandı" : "\(newCount) yeni")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(newCount == 0 ? Color.secondary : tint)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(tint.opacity(newCount == 0 ? 0.06 : 0.14))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(tint.opacity(0.25), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(newCount == 0 || importTask != nil)
-    }
-
-    private var summaryRow: some View {
-        let total = MergedLibrary.all.count
-        let alreadyIn = existingTerms.intersection(MergedLibrary.allTermSet).count
-        return HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(total) kelime")
-                    .font(.headline)
-                Text("\(alreadyIn) zaten ekli")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "books.vertical.fill")
-                .font(.title)
-                .foregroundStyle(.tint)
-        }
-        .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func row(for word: CommonWord) -> some View {
-        let termKey = word.term.lowercased()
-        let alreadyAdded = existingTerms.contains(termKey)
-        let justAdded = recentlyAdded.contains(termKey)
-
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(word.term)
-                        .font(.body.bold())
-                    Text(word.partOfSpeech)
-                        .font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.tertiary, in: Capsule())
-                    Spacer()
-                }
-                if word.turkishMeaning.isEmpty {
-                    Text("Tanım ilk açışta cihazda dolar")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .italic()
-                } else {
-                    Text(word.turkishMeaning)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                if !word.ipa.isEmpty {
-                    Text(word.ipa)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.tertiary)
-                }
-                HStack(spacing: 6) {
-                    Text(word.level.label)
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(cefrColor(word.level).opacity(0.18), in: Capsule())
-                        .foregroundStyle(cefrColor(word.level))
-                    ForEach(word.topics, id: \.self) { tp in
-                        Image(systemName: tp.symbol)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Button {
-                addSingle(word)
-            } label: {
-                if alreadyAdded {
-                    Label(justAdded ? "Eklendi" : "Ekli", systemImage: "checkmark.circle.fill")
-                        .labelStyle(.iconOnly)
-                        .font(.title2)
-                        .foregroundStyle(.green)
-                } else {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(alreadyAdded)
-            .accessibilityLabel(alreadyAdded ? "Ekli" : "Ekle")
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-    }
-
-    private var visibleNewCount: Int {
-        filtered.filter { !existingTerms.contains($0.term.lowercased()) }.count
-    }
-
-    private func newCount(in list: [CommonWord]) -> Int {
-        list.filter { !existingTerms.contains($0.term.lowercased()) }.count
-    }
-
-    private func groupedByLevel(_ list: [CommonWord]) -> [(CEFRLevel, [CommonWord])] {
-        let groups = Dictionary(grouping: list, by: { $0.level })
-        return CEFRLevel.allCases.compactMap { level in
-            guard let words = groups[level], !words.isEmpty else { return nil }
-            return (level, words)
-        }
-    }
-
-    @ViewBuilder
-    private func levelSectionHeader(level: CEFRLevel, words: [CommonWord]) -> some View {
-        let newCountInLevel = newCount(in: words)
-        let tint = cefrColor(level)
-        HStack(spacing: 8) {
-            Text(level.label)
-                .font(.caption2.bold())
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(tint.opacity(0.2), in: Capsule())
-                .foregroundStyle(tint)
-            Text("\(words.count) kelime · \(newCountInLevel) yeni")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(nil)
-            Spacer()
-            Button {
-                importLevel(words)
-            } label: {
-                Label("Hepsini ekle", systemImage: "tray.and.arrow.down")
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(tint.opacity(newCountInLevel == 0 ? 0.08 : 0.18), in: Capsule())
-                    .foregroundStyle(newCountInLevel == 0 ? Color.secondary : tint)
-                    .textCase(nil)
-            }
-            .buttonStyle(.plain)
-            .disabled(newCountInLevel == 0 || importTask != nil)
-        }
-    }
+    // MARK: - Import flow
 
     private func addSingle(_ word: CommonWord) {
         importInto([word])
@@ -549,7 +265,7 @@ struct LibraryImportView: View {
 
         let useOverlay = candidates.count > 1
         if useOverlay {
-            importProgress = ImportProgress(total: candidates.count, done: 0, currentTerm: "")
+            importProgress = LibraryImportProgress(total: candidates.count, done: 0, currentTerm: "")
         }
         importCancelled = false
 
