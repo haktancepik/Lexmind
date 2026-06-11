@@ -35,6 +35,9 @@ struct LibraryImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var existingWords: [Word]
+    @Query(filter: #Predicate<WordDeck> { $0.isPreset == true },
+           sort: \WordDeck.sortOrder)
+    private var presetDecks: [WordDeck]
 
     @State private var searchText = ""
     @State private var importedCount: Int = 0
@@ -125,7 +128,10 @@ struct LibraryImportView: View {
                     importProgressOverlay(progress)
                 }
             }
-            .onAppear { refreshExistingTerms() }
+            .onAppear {
+                refreshExistingTerms()
+                WordDeck.bootstrapPresetsIfNeeded(in: context)
+            }
             .onChange(of: existingWords.count) { _, _ in
                 refreshExistingTerms()
             }
@@ -145,6 +151,11 @@ struct LibraryImportView: View {
         List {
             Section {
                 summaryRow
+            }
+
+            Section("Hazır Desteler") {
+                presetDecksGrid
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
             }
 
             Section {
@@ -299,6 +310,54 @@ struct LibraryImportView: View {
         case "purple": return .purple
         default: return .accentColor
         }
+    }
+
+    private var presetDecksGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: 8),
+                      GridItem(.flexible(), spacing: 8),
+                      GridItem(.flexible(), spacing: 8)],
+            spacing: 8
+        ) {
+            ForEach(CEFRLevel.allCases) { lv in
+                presetDeckTile(for: lv)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func presetDeckTile(for level: CEFRLevel) -> some View {
+        let words = MergedLibrary.filtered(level: level, topic: nil)
+        let newCount = self.newCount(in: words)
+        let tint = cefrColor(level)
+        Button {
+            importLevel(words)
+        } label: {
+            VStack(spacing: 4) {
+                Text(level.label)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(tint)
+                Text("\(words.count) kelime")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(newCount == 0 ? "Tamamlandı" : "\(newCount) yeni")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(newCount == 0 ? Color.secondary : tint)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(tint.opacity(newCount == 0 ? 0.06 : 0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(newCount == 0 || importTask != nil)
     }
 
     private var summaryRow: some View {

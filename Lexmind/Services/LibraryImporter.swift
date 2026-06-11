@@ -55,6 +55,20 @@ actor LibraryImporter {
             return ImportResult(added: 0, cancelled: false)
         }
 
+        // Index preset decks by their CEFR raw so each new word can be
+        // bound to the matching deck without a fetch per row. Decks are
+        // re-fetched each call (cheap — 6 rows max) so a deck created
+        // mid-session is picked up.
+        let presetDecks = (try? modelContext.fetch(FetchDescriptor<WordDeck>(
+            predicate: #Predicate { $0.isPreset == true }
+        ))) ?? []
+        var presetByLevel: [String: WordDeck] = [:]
+        for deck in presetDecks {
+            if let raw = deck.presetLevelRaw {
+                presetByLevel[raw] = deck
+            }
+        }
+
         var added = 0
         var index = 0
 
@@ -94,6 +108,14 @@ actor LibraryImporter {
                 card.word = word
                 modelContext.insert(word)
                 modelContext.insert(card)
+
+                // Bind to the preset deck matching this word's CEFR level.
+                // Idempotent: the candidate filter above already rules out
+                // duplicates, so a freshly-inserted word can't already be
+                // a member of any deck.
+                if let raw = cw.levelRaw, let deck = presetByLevel[raw] {
+                    deck.words.append(word)
+                }
 
                 for rel in cw.synonyms {
                     let r = WordRelation(
