@@ -154,10 +154,10 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 - [x] Critical path'lere signpost: `LibraryImporter.importWords` (total + per-batch save error log), `FSRSScheduler.schedule` (rating/state metadata), `ReadingPassageGenerator.generate` (kelime sayısı metadata). Instruments'te os_signpost track'inden chartable
 
 ### 1.9 String Catalog Altyapısı (sadece TR, EN sonra)
-- [ ] `Localizable.xcstrings` oluştur — TR-only doldur
-- [ ] `HomeView`, `StudyView`, `StatsView`, `SettingsView`, `OnboardingView` inline TR string'leri `String(localized:)` ile değiştir
-- [ ] Sonra: `AddWordView`, `WordDetailView`, `WordsListView`, `LibraryImportView`, `ReadingPassageView`, `RootTabView`
-- [ ] DataModels'deki `label` getter'ları
+- [x] `Localizable.xcstrings` oluştur — TR-only doldur: `Resources/Localizable.xcstrings` (sourceLanguage="tr"). Xcode build sırasında SwiftUI `LocalizedStringKey` otomasyonu ile tüm `Text`/`Label`/`navigationTitle`/`alert` literal'larını ve `String(localized:)` çağrılarını harvest etti — 220 entry, 687 satır
+- [x] `HomeView`, `StudyView`, `StatsView`, `SettingsView`, `OnboardingView` inline TR string'leri `String(localized:)` ile değiştir: ek manuel sarma gerekmedi — SwiftUI initializer'ları zaten `LocalizedStringKey` kabul ediyor, build harvest etti
+- [x] `AddWordView`, `WordDetailView`, `WordsListView`, `LibraryImportView`, `ReadingPassageView`, `RootTabView`: aynı şekilde otomatik harvest edildi
+- [x] DataModels'deki `label` getter'ları: `CardState`, `WordTopic`, `RelationKind`, `ReviewRating` `var label: String` getter'larındaki ham TR string'ler `String(localized:)` ile sarmalandı (SwiftUI dışından çağrılabildiği için manuel sarma şart). `CEFRLevel.label = rawValue` zaten "A1"/"B2" gibi locale-bağımsız token döndürüyor — bırakıldı
 - [ ] EN sütununu Faz 3'te doldur
 
 ### 1.10 CI — Minimum

@@ -14,10 +14,10 @@ enum CardState: Int, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .new: return "Yeni"
-        case .learning: return "Öğreniliyor"
-        case .review: return "Tekrar"
-        case .relearning: return "Yeniden"
+        case .new: return String(localized: "Yeni")
+        case .learning: return String(localized: "Öğreniliyor")
+        case .review: return String(localized: "Tekrar")
+        case .relearning: return String(localized: "Yeniden")
         }
     }
 }
@@ -63,17 +63,17 @@ enum WordTopic: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .daily: return "Günlük"
-        case .work: return "İş"
-        case .travel: return "Seyahat"
-        case .academic: return "Akademik"
-        case .technology: return "Teknoloji"
-        case .business: return "İş Dünyası"
-        case .health: return "Sağlık"
-        case .emotions: return "Duygular"
-        case .food: return "Yemek"
-        case .nature: return "Doğa"
-        case .general: return "Genel"
+        case .daily: return String(localized: "Günlük")
+        case .work: return String(localized: "İş")
+        case .travel: return String(localized: "Seyahat")
+        case .academic: return String(localized: "Akademik")
+        case .technology: return String(localized: "Teknoloji")
+        case .business: return String(localized: "İş Dünyası")
+        case .health: return String(localized: "Sağlık")
+        case .emotions: return String(localized: "Duygular")
+        case .food: return String(localized: "Yemek")
+        case .nature: return String(localized: "Doğa")
+        case .general: return String(localized: "Genel")
         }
     }
 
@@ -103,9 +103,9 @@ enum RelationKind: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .synonym: return "Eş Anlamlı"
-        case .antonym: return "Zıt Anlamlı"
-        case .related: return "İlgili"
+        case .synonym: return String(localized: "Eş Anlamlı")
+        case .antonym: return String(localized: "Zıt Anlamlı")
+        case .related: return String(localized: "İlgili")
         }
     }
 
@@ -138,10 +138,10 @@ enum ReviewRating: Int, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .again: return "Tekrar"
-        case .hard: return "Zor"
-        case .good: return "İyi"
-        case .easy: return "Kolay"
+        case .again: return String(localized: "Tekrar")
+        case .hard: return String(localized: "Zor")
+        case .good: return String(localized: "İyi")
+        case .easy: return String(localized: "Kolay")
         }
     }
 
