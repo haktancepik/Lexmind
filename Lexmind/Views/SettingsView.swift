@@ -5,12 +5,27 @@
 
 import SwiftUI
 import SwiftData
+import os
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Query private var goals: [DailyGoal]
 
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("preferredCEFRLevel") private var preferredCEFRRaw = ""
+    @AppStorage("activeDeckID") private var activeDeckIDRaw = ""
+    @AppStorage("rootTabSelection") private var rootTabSelection = 0
+
+    @State private var showWipeConfirm = false
+    @State private var wipeError: String?
+
     private var goal: DailyGoal { goals.first ?? DailyGoal() }
+
+    /// Marketing copy promises a Turkish-language privacy policy hosted on the
+    /// project's GitHub Pages site. URLs are stable across releases; flip the
+    /// Pages source once the static markdown is in place.
+    private static let privacyPolicyURL = URL(string: "https://haktancepik.github.io/Lexmind/privacy")!
+    private static let termsURL = URL(string: "https://haktancepik.github.io/Lexmind/terms")!
 
     private var versionLabel: String {
         let info = Bundle.main.infoDictionary
@@ -32,6 +47,21 @@ struct SettingsView: View {
             }
             .navigationTitle("Ayarlar")
             .onAppear(perform: ensureGoalExists)
+            .confirmationDialog(
+                "Tüm verilerin silinecek",
+                isPresented: $showWipeConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Tüm verilerimi sil", role: .destructive) { wipeAllData() }
+                Button("Vazgeç", role: .cancel) { }
+            } message: {
+                Text("Kelime listesi, ilerleme, desteler ve okuma metinleri kalıcı olarak silinecek. Bu işlem geri alınamaz.")
+            }
+            .alert("Silinemedi", isPresented: .constant(wipeError != nil)) {
+                Button("Tamam") { wipeError = nil }
+            } message: {
+                Text(wipeError ?? "")
+            }
         }
     }
 
@@ -101,7 +131,7 @@ struct SettingsView: View {
     }
 
     private var dataSection: some View {
-        Section("Veri") {
+        Section {
             comingSoonRow(
                 title: "Verilerimi dışa aktar",
                 detail: "Faz 2'de aktifleşecek",
@@ -112,11 +142,16 @@ struct SettingsView: View {
                 detail: "Faz 2'de aktifleşecek",
                 symbol: "square.and.arrow.down"
             )
-            comingSoonRow(
-                title: "Tüm verilerimi sil",
-                detail: "Faz 2'de aktifleşecek",
-                symbol: "trash"
-            )
+            Button(role: .destructive) {
+                showWipeConfirm = true
+            } label: {
+                Label("Tüm verilerimi sil", systemImage: "trash")
+            }
+        } header: {
+            Text("Veri")
+        } footer: {
+            Text("Silme işlemi geri alınamaz. CloudKit eşitleme aktif değilken sadece bu cihazdaki kayıtlar etkilenir.")
+                .font(.caption)
         }
     }
 
@@ -132,19 +167,15 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section("Hakkında") {
-            comingSoonRow(
-                title: "Gizlilik Politikası",
-                detail: "1.10'da bağlanacak",
-                symbol: "hand.raised"
-            )
-            comingSoonRow(
-                title: "Kullanım Koşulları",
-                detail: "1.10'da bağlanacak",
-                symbol: "doc.text"
-            )
+            Link(destination: Self.privacyPolicyURL) {
+                Label("Gizlilik Politikası", systemImage: "hand.raised")
+            }
+            Link(destination: Self.termsURL) {
+                Label("Kullanım Koşulları", systemImage: "doc.text")
+            }
             comingSoonRow(
                 title: "Açık Kaynak Lisansları",
-                detail: "1.10'da bağlanacak",
+                detail: "Faz 3'te eklenecek",
                 symbol: "books.vertical"
             )
             LabeledContent {
@@ -175,6 +206,39 @@ struct SettingsView: View {
         guard goals.isEmpty else { return }
         context.insert(DailyGoal())
         try? context.save()
+    }
+
+    /// One-shot wipe of every SwiftData entity plus the AppStorage keys
+    /// that survive uninstall-equivalent reset. Bounces the user back
+    /// into onboarding so they hit the empty-state hero card instead of
+    /// a "0 due, 0 streak" ghost screen.
+    private func wipeAllData() {
+        do {
+            // Order doesn't matter for cascading deletes since relations
+            // are inverse-declared; SwiftData handles dependent rows.
+            try context.delete(model: ReviewLog.self)
+            try context.delete(model: FSRSCard.self)
+            try context.delete(model: WordRelation.self)
+            try context.delete(model: Word.self)
+            try context.delete(model: WordDeck.self)
+            try context.delete(model: DailyReadingPassage.self)
+            try context.delete(model: DailyGoal.self)
+            try context.save()
+
+            // Reset the per-user UX state so the next launch behaves like
+            // a fresh install. Subscription receipts (Faz 2) intentionally
+            // stay — those belong to the Apple ID, not the data store.
+            preferredCEFRRaw = ""
+            activeDeckIDRaw = ""
+            rootTabSelection = 0
+            hasCompletedOnboarding = false
+
+            ReviewPromptManager.resetForTesting()
+            Log.app.info("All user data wiped via Settings")
+        } catch {
+            Log.data.error("Wipe failed: \(error.localizedDescription)")
+            wipeError = error.localizedDescription
+        }
     }
 }
 
