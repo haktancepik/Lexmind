@@ -106,6 +106,10 @@ enum CommonWordsLibrary {
     }
 
     nonisolated private static func loadAll() -> [CommonWord] {
+        let signpostID = Signpost.library.makeSignpostID()
+        let state = Signpost.library.beginInterval("loadCommon", id: signpostID)
+        defer { Signpost.library.endInterval("loadCommon", state) }
+
         guard let url = Bundle.main.url(forResource: "common", withExtension: "json") else {
             Log.library.fault("common.json not found in bundle")
             return []
@@ -113,7 +117,9 @@ enum CommonWordsLibrary {
         do {
             let data = try Data(contentsOf: url)
             let raw = try JSONDecoder().decode([CommonWordEntry].self, from: data)
-            return raw.compactMap(convert)
+            let result = raw.compactMap(convert)
+            Log.library.info("common.json decoded — \(result.count) entries")
+            return result
         } catch {
             Log.library.error("common.json decode failed: \(error.localizedDescription)")
             return []

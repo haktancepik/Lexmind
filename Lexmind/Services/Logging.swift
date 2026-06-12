@@ -46,4 +46,5 @@ enum Signpost {
     static let importer = OSSignposter(subsystem: Log.subsystem, category: "services.importer")
     static let fsrs = OSSignposter(subsystem: Log.subsystem, category: "fsrs")
     static let ai = OSSignposter(subsystem: Log.subsystem, category: "services.ai")
+    static let library = OSSignposter(subsystem: Log.subsystem, category: "services.library")
 }

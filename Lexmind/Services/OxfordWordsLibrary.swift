@@ -70,6 +70,10 @@ enum OxfordWordsLibrary {
     }
 
     nonisolated private static func loadAll() -> [CommonWord] {
+        let signpostID = Signpost.library.makeSignpostID()
+        let state = Signpost.library.beginInterval("loadOxford", id: signpostID)
+        defer { Signpost.library.endInterval("loadOxford", state) }
+
         guard let url = Bundle.main.url(forResource: "oxford5000", withExtension: "json") else {
             Log.library.fault("oxford5000.json not found in bundle")
             return []
@@ -77,7 +81,9 @@ enum OxfordWordsLibrary {
         do {
             let data = try Data(contentsOf: url)
             let raw = try JSONDecoder().decode([OxfordWordEntry].self, from: data)
-            return raw.compactMap(convert)
+            let result = raw.compactMap(convert)
+            Log.library.info("oxford5000.json decoded — \(result.count) entries")
+            return result
         } catch {
             Log.library.error("oxford5000.json decode failed: \(error.localizedDescription)")
             return []
