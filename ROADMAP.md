@@ -198,11 +198,11 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 - [ ] İki cihazlı manuel test: yeni kelime, review, silme
 
 ### 2.2 StoreKit 2 + Paywall
-- [ ] Free tier sınırı: 100 kelime, günde 1 reading passage, kütüphane import kısıtlı
-- [ ] App Store Connect'te subscription product (aylık + yıllık, opsiyonel lifetime)
-- [ ] `Services/EntitlementsService.swift` — `@Observable`, `Transaction.currentEntitlements` dinler
-- [ ] `Views/PaywallView` — değer önerisi + iki plan + restore butonu
-- [ ] Feature gate'ler: `AddWordView` limit kontrolü, `LibraryImportView` Pro badge
+- [x] Free tier sınırı: 100 kelime, günde 1 reading passage, kütüphane import kısıtlı: `FreeTier` enum (`maxWords=100`, `maxReadingPassagesPerDay=1`, `wordCapReached(currentCount:)`); AddWordView ve LibraryImportView import sırasında kontrol eder, sınır aşılırsa paywall sheet
+- [ ] App Store Connect'te subscription product (aylık + yıllık, opsiyonel lifetime) — kullanıcı tarafı: `ProductIDs.monthlySubscription = "com.lexmind.pro.monthly"` + `yearlySubscription = "com.lexmind.pro.yearly"` enum sabitleri; App Store Connect'te bu ID'lerle subscription yaratılınca `Product.products(for:)` çağrısı otomatik bulur
+- [x] `Services/EntitlementsService.swift` — `@Observable`, `Transaction.currentEntitlements` dinler: @MainActor @Observable final class. `isPro` Bool, `products: [Product]`, `lastError`, `isProcessing`. `bootstrap()` launch'ta product fetch + entitlement refresh; `Transaction.updates` listener init'te uzun süreli Task'la başlar (renewal/refund/family-sharing yakalanır); `purchase(_ product:)` async PurchaseOutcome (purchased/userCancelled/pending/failed), `restore()` `AppStore.sync()` + refresh. `LexmindApp` `@State` olarak tutar, `.environment(entitlements)` Scene'e enjekte eder
+- [x] `Views/PaywallView` — değer önerisi + iki plan + restore butonu: sheet UI — hero sparkle ikon + 4 value props (sınırsız kelime/reading/iCloud sync 2.1/bağımsız dev), iki plan kartı (selection state + accent border), Satın Al borderedProminent button, restore link, Gizlilik/Koşullar Link'leri. `products` boşsa "Aboneliklere şu an erişilemiyor" placeholder (App Store Connect setup öncesi crashe etmez); `isPro` true olunca sheet auto-dismiss
+- [x] Feature gate'ler: `AddWordView` limit kontrolü, `LibraryImportView` Pro badge: AddWord'da `save()` başında `entitlements.isPro` + `FreeTier.wordCapReached` kontrolü → aşılırsa `showPaywall = true`; LibraryImport'ta `importInto()` öncesi candidate count + existing > cap ise paywall, ayrıca üstte `freeCapBanner` ("Free üyelik: N kelime kaldı" + Pro'ya geç button) Pro değilse görünür; SettingsView proSection'da `isPro` true ise "Pro üyeliğin aktif" badge, false ise "Pro'ya geç" Button paywall'a açar
 
 ### 2.3 Accessibility Pass (somut hedef)
 **Mevcut taban (Pass A öncesi):** sadece 3 `accessibilityLabel` vardı. Reviewer için kabul edilemez.

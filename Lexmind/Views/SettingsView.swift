@@ -10,7 +10,10 @@ import os
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(EntitlementsService.self) private var entitlements
     @Query private var goals: [DailyGoal]
+
+    @State private var showPaywall = false
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("preferredCEFRLevel") private var preferredCEFRRaw = ""
@@ -125,6 +128,9 @@ struct SettingsView: View {
                 Button("Tamam") { importSuccessMessage = nil }
             } message: {
                 Text(importSuccessMessage ?? "")
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(entitlements: entitlements)
             }
         }
     }
@@ -242,11 +248,23 @@ struct SettingsView: View {
 
     private var proSection: some View {
         Section("Lexmind Pro") {
-            comingSoonRow(
-                title: "Pro'ya geç",
-                detail: "Faz 2'de aktifleşecek",
-                symbol: "crown"
-            )
+            if entitlements.isPro {
+                LabeledContent {
+                    Text("Aktif")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.green)
+                } label: {
+                    Label("Pro üyeliğin aktif", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                }
+            } else {
+                Button {
+                    showPaywall = true
+                } label: {
+                    Label("Pro'ya geç", systemImage: "crown")
+                }
+                .accessibilityHint(Text("Sınırsız kelime, sınırsız okuma metni ve cihazlar arası yedek için aboneliği aç"))
+            }
         }
     }
 
@@ -478,4 +496,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .modelContainer(PreviewData.container)
+        .environment(EntitlementsService())
 }

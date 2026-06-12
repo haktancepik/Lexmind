@@ -14,10 +14,13 @@ import SwiftData
 struct LibraryImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(EntitlementsService.self) private var entitlements
     @Query private var existingWords: [Word]
     @Query(filter: #Predicate<WordDeck> { $0.isPreset == true },
            sort: \WordDeck.sortOrder)
     private var presetDecks: [WordDeck]
+
+    @State private var showPaywall = false
 
     /// Optional CEFR level to seed `levelFilter` with on first appearance —
     /// lets the onboarding flow open the sheet pre-filtered to the
@@ -119,7 +122,31 @@ struct LibraryImportView: View {
                 _ = await oxford
                 librariesReady = true
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(entitlements: entitlements)
+            }
         }
+    }
+
+    private var freeCapBanner: some View {
+        let remaining = max(0, FreeTier.maxWords - existingTerms.count)
+        return HStack(spacing: 10) {
+            Image(systemName: "crown.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Free üyelik: \(remaining) kelime kaldı")
+                    .font(.subheadline.bold())
+                Text("Sınırı kaldırmak için Lexmind Pro'ya geç.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Pro'ya geç") { showPaywall = true }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     @ToolbarContentBuilder
@@ -162,6 +189,9 @@ struct LibraryImportView: View {
         List {
             Section {
                 LibraryImportSummaryRow(existingTerms: existingTerms)
+                if !entitlements.isPro {
+                    freeCapBanner
+                }
             }
             Section("Hazır Desteler") {
                 LibraryImportPresetDecks(
@@ -251,6 +281,14 @@ struct LibraryImportView: View {
             return
         }
 
+        // Free tier hard stop: if importing this batch would push the
+        // library past the cap, route the user to the paywall instead.
+        if !entitlements.isPro,
+           existingSnapshot.count + candidates.count > FreeTier.maxWords {
+            showPaywall = true
+            return
+        }
+
         let payload = candidates.map { cw in
             let mapRel: ([LibraryRelation]) -> [LibraryImporter.ImportableWord.Relation] = { items in
                 items.map { .init(term: $0.term, verified: $0.verified) }
@@ -324,4 +362,5 @@ struct LibraryImportView: View {
 #Preview {
     LibraryImportView()
         .modelContainer(PreviewData.container)
+        .environment(EntitlementsService())
 }

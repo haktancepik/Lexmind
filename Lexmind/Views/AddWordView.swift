@@ -9,7 +9,10 @@ import SwiftData
 struct AddWordView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(EntitlementsService.self) private var entitlements
+    @Query private var existingWords: [Word]
 
+    @State private var showPaywall = false
     @State private var term: String = ""
     @State private var analyzer = WordAnalyzer()
     @State private var verifier = RelationVerifier()
@@ -136,6 +139,9 @@ struct AddWordView: View {
                 _ = await common
                 _ = await oxford
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView(entitlements: entitlements)
+            }
         }
     }
 
@@ -231,6 +237,15 @@ struct AddWordView: View {
         let cleanedTerm = trimmedTerm.lowercased()
         guard !cleanedTerm.isEmpty else { return }
 
+        // Free tier: cap at FreeTier.maxWords. Existing rows are
+        // counted (not the incoming word); duplicates would be caught
+        // downstream by the unique constraint anyway.
+        if !entitlements.isPro,
+           FreeTier.wordCapReached(currentCount: existingWords.count) {
+            showPaywall = true
+            return
+        }
+
         isSaving = true
         defer { isSaving = false }
 
@@ -317,4 +332,5 @@ private struct TopicMultiSelectView: View {
 #Preview {
     AddWordView()
         .modelContainer(PreviewData.container)
+        .environment(EntitlementsService())
 }

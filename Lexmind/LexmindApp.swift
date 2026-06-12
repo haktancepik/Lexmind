@@ -13,6 +13,7 @@ struct LexmindApp: App {
 
     let modelContainer: ModelContainer
     private let metricObserver = MetricKitObserver()
+    @State private var entitlements = EntitlementsService()
 
     init() {
         do {
@@ -33,11 +34,15 @@ struct LexmindApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if hasCompletedOnboarding {
-                RootTabView()
-            } else {
-                OnboardingView()
+            Group {
+                if hasCompletedOnboarding {
+                    RootTabView()
+                } else {
+                    OnboardingView()
+                }
             }
+            .environment(entitlements)
+            .task { await entitlements.bootstrap() }
         }
         .modelContainer(modelContainer)
     }
