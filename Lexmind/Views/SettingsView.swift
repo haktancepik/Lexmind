@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 import os
 
 struct SettingsView: View {
@@ -18,6 +19,14 @@ struct SettingsView: View {
 
     @State private var showWipeConfirm = false
     @State private var wipeError: String?
+
+    @State private var exportURL: URL?
+    @State private var exportError: String?
+    @State private var showImportPicker = false
+    @State private var importSummary: BackupService.ImportSummary?
+    @State private var pendingImportData: Data?
+    @State private var importError: String?
+    @State private var importSuccessMessage: String?
 
     private var goal: DailyGoal { goals.first ?? DailyGoal() }
 
@@ -61,6 +70,48 @@ struct SettingsView: View {
                 Button("Tamam") { wipeError = nil }
             } message: {
                 Text(wipeError ?? "")
+            }
+            .alert("Dışa aktarılamadı", isPresented: .constant(exportError != nil)) {
+                Button("Tamam") { exportError = nil }
+            } message: {
+                Text(exportError ?? "")
+            }
+            .sheet(isPresented: .constant(exportURL != nil), onDismiss: { exportURL = nil }) {
+                if let url = exportURL {
+                    ShareLink(item: url) {
+                        Label("Yedeği paylaş", systemImage: "square.and.arrow.up")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding()
+                    .presentationDetents([.medium])
+                }
+            }
+            .fileImporter(
+                isPresented: $showImportPicker,
+                allowedContentTypes: [.json],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImportPicked(result)
+            }
+            .sheet(isPresented: .constant(importSummary != nil), onDismiss: {
+                pendingImportData = nil
+            }) {
+                if let summary = importSummary {
+                    importConfirmSheet(summary: summary)
+                }
+            }
+            .alert("İçe aktarılamadı", isPresented: .constant(importError != nil)) {
+                Button("Tamam") { importError = nil }
+            } message: {
+                Text(importError ?? "")
+            }
+            .alert("İçe aktarıldı", isPresented: .constant(importSuccessMessage != nil)) {
+                Button("Tamam") { importSuccessMessage = nil }
+            } message: {
+                Text(importSuccessMessage ?? "")
             }
         }
     }
@@ -132,16 +183,16 @@ struct SettingsView: View {
 
     private var dataSection: some View {
         Section {
-            comingSoonRow(
-                title: "Verilerimi dışa aktar",
-                detail: "Faz 2'de aktifleşecek",
-                symbol: "square.and.arrow.up"
-            )
-            comingSoonRow(
-                title: "Verilerimi içe aktar",
-                detail: "Faz 2'de aktifleşecek",
-                symbol: "square.and.arrow.down"
-            )
+            Button {
+                runExport()
+            } label: {
+                Label("Verilerimi dışa aktar", systemImage: "square.and.arrow.up")
+            }
+            Button {
+                showImportPicker = true
+            } label: {
+                Label("Verilerimi içe aktar", systemImage: "square.and.arrow.down")
+            }
             Button(role: .destructive) {
                 showWipeConfirm = true
             } label: {
@@ -150,7 +201,7 @@ struct SettingsView: View {
         } header: {
             Text("Veri")
         } footer: {
-            Text("Silme işlemi geri alınamaz. CloudKit eşitleme aktif değilken sadece bu cihazdaki kayıtlar etkilenir.")
+            Text("Dışa aktarma kelimelerini, ilerlemeni, kullanıcı destelerini ve geçmişini tek bir JSON dosyasına yazar. Silme geri alınamaz.")
                 .font(.caption)
         }
     }
@@ -199,6 +250,100 @@ struct SettingsView: View {
         } label: {
             Label(title, systemImage: symbol)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Backup / Restore
+
+    private func runExport() {
+        let service = BackupService(context: context)
+        do {
+            let data = try service.export()
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            let stamp = formatter.string(from: .now)
+                .replacingOccurrences(of: ":", with: "-")
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("lexmind-backup-\(stamp).json")
+            try data.write(to: url, options: .atomic)
+            exportURL = url
+            Log.data.info("Backup exported — \(data.count) bytes")
+        } catch {
+            Log.data.error("Backup export failed: \(error.localizedDescription)")
+            exportError = error.localizedDescription
+        }
+    }
+
+    private func handleImportPicked(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            importError = error.localizedDescription
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let needsScope = url.startAccessingSecurityScopedResource()
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let service = BackupService(context: context)
+                let summary = try service.importPayload(data: data, dryRun: true)
+                pendingImportData = data
+                importSummary = summary
+            } catch {
+                Log.data.error("Backup import dry-run failed: \(error.localizedDescription)")
+                importError = error.localizedDescription
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func importConfirmSheet(summary: BackupService.ImportSummary) -> some View {
+        NavigationStack {
+            Form {
+                Section("Yedek özeti") {
+                    LabeledContent("Şema sürümü", value: "v\(summary.payloadVersion)")
+                    LabeledContent("Toplam kelime", value: "\(summary.totalWordsInPayload)")
+                    LabeledContent("Yeni eklenecek", value: "\(summary.newWords)")
+                    LabeledContent("Zaten ekli (atlanır)", value: "\(summary.skippedExistingWords)")
+                    LabeledContent("Tekrar logları", value: "\(summary.logsInPayload)")
+                    LabeledContent("Yeni kullanıcı destesi", value: "\(summary.newUserDecks)")
+                    LabeledContent("Günlük hedef", value: summary.goalReplaced ? "Üzerine yazılacak" : "—")
+                }
+                Section {
+                    Button("İçe aktarmayı onayla") {
+                        applyImport()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                Section {
+                    Button("Vazgeç", role: .cancel) {
+                        importSummary = nil
+                        pendingImportData = nil
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("İçe aktar")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func applyImport() {
+        guard let data = pendingImportData else {
+            importSummary = nil
+            return
+        }
+        let service = BackupService(context: context)
+        do {
+            let final = try service.importPayload(data: data, dryRun: false)
+            importSummary = nil
+            pendingImportData = nil
+            importSuccessMessage = "\(final.newWords) yeni kelime, \(final.newUserDecks) yeni deste eklendi."
+        } catch {
+            Log.data.error("Backup import apply failed: \(error.localizedDescription)")
+            importSummary = nil
+            pendingImportData = nil
+            importError = error.localizedDescription
         }
     }
 
