@@ -18,6 +18,7 @@ struct OnboardingView: View {
     @State private var dailyNew: Int = 10
     @State private var dailyReviews: Int = 50
     @State private var showLibrary = false
+    @State private var libraryInitialLevel: CEFRLevel? = nil
 
     private static let pageCount = 4
 
@@ -38,7 +39,7 @@ struct OnboardingView: View {
             }
         }
         .sheet(isPresented: $showLibrary, onDismiss: complete) {
-            LibraryImportView()
+            LibraryImportView(initialLevel: libraryInitialLevel)
         }
     }
 
@@ -134,20 +135,12 @@ struct OnboardingView: View {
             subtitle: "5000+ CEFR seviyeli kelimeden başlangıç için birkaçını ekleyelim mi?"
         ) {
             VStack(spacing: 12) {
-                Button {
-                    persistChoices()
-                    showLibrary = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Hazır kütüphaneden ekle")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                if let suggested = selectedLevel {
+                    levelSuggestionCard(for: suggested)
+                    fullLibraryButton(prominent: false, label: "Tüm kütüphaneyi göster")
+                } else {
+                    fullLibraryButton(prominent: true, label: "Hazır kütüphaneden ekle")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
 
                 Button {
                     persistChoices()
@@ -162,6 +155,77 @@ struct OnboardingView: View {
             }
             .padding(.top, 8)
         }
+    }
+
+    @ViewBuilder
+    private func fullLibraryButton(prominent: Bool, label: String) -> some View {
+        if prominent {
+            Button {
+                persistChoices()
+                libraryInitialLevel = nil
+                showLibrary = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "books.vertical")
+                    Text(label).font(.headline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        } else {
+            Button {
+                persistChoices()
+                libraryInitialLevel = nil
+                showLibrary = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "books.vertical")
+                    Text(label).font(.subheadline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        }
+    }
+
+    @ViewBuilder
+    private func levelSuggestionCard(for level: CEFRLevel) -> some View {
+        let count = MergedLibrary.filtered(level: level, topic: nil).count
+        Button {
+            persistChoices()
+            libraryInitialLevel = level
+            showLibrary = true
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Senin için önerilen")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("\(level.label) destesi — \(count) kelime")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Bottom bar

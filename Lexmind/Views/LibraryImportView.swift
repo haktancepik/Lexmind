@@ -19,6 +19,15 @@ struct LibraryImportView: View {
            sort: \WordDeck.sortOrder)
     private var presetDecks: [WordDeck]
 
+    /// Optional CEFR level to seed `levelFilter` with on first appearance —
+    /// lets the onboarding flow open the sheet pre-filtered to the
+    /// learner's chosen level.
+    private let initialLevel: CEFRLevel?
+
+    init(initialLevel: CEFRLevel? = nil) {
+        self.initialLevel = initialLevel
+    }
+
     @State private var searchText = ""
     @State private var importedCount: Int = 0
     @State private var showResult = false
@@ -95,6 +104,9 @@ struct LibraryImportView: View {
             .onAppear {
                 refreshExistingTerms()
                 WordDeck.bootstrapPresetsIfNeeded(in: context)
+                if let initialLevel, levelFilter == nil {
+                    levelFilter = initialLevel
+                }
             }
             .onChange(of: existingWords.count) { _, _ in
                 refreshExistingTerms()
