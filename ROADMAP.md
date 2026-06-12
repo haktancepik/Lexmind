@@ -226,14 +226,19 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 - [ ] "Verilerimi içe aktar" (validation + dry run + confirm)
 
 ### 2.6 Crash Reporting — MetricKit yeter
-- [ ] MetricKit yeterli, Sentry ekleme — privacy maliyeti vs detay düşük ROI
-- [ ] App Store Connect'te crash log'ları takip et
-- [ ] Sentry sadece Faz 3'te ve gerçekten ihtiyaç doğarsa
+- [x] MetricKit yeterli, Sentry ekleme — privacy maliyeti vs detay düşük ROI (1.8'de yapıldı: `MetricKitObserver` MXMetricManagerSubscriber, daily payload + crash/hang/cpuException/diskWrite diagnostic summary'leri `Log.metrics`'e düşüyor)
+- [ ] App Store Connect'te crash log'ları takip et (manuel — TestFlight/canlı app'te periyodik check)
+- [x] Sentry sadece Faz 3'te ve gerçekten ihtiyaç doğarsa — ertelendi, MetricKit yeter
 
 ### 2.7 GDPR / KVKK Veri Akışları
-- [ ] Settings → "Tüm verilerimi sil" (one-shot DELETE FROM Word/Card/Log + CloudKit reset)
-- [ ] Settings → "Verilerimi indir" (2.5'in GDPR formatında JSON versiyonu)
-- [ ] In-app "Gizlilik Politikası" linki Settings'te
+- [x] Settings → "Tüm verilerimi sil" (one-shot DELETE FROM Word/Card/Log + CloudKit reset): SettingsView dataSection'da `.destructive` Button + confirmationDialog (yıkıcı uyarı + Vazgeç/Sil). `wipeAllData()` 7 entity'yi (`ReviewLog`/`FSRSCard`/`WordRelation`/`Word`/`WordDeck`/`DailyReadingPassage`/`DailyGoal`) `try context.delete(model:)` ile siler, AppStorage'ları (`hasCompletedOnboarding`, `preferredCEFRLevel`, `activeDeckID`, `rootTabSelection`) sıfırlar, `ReviewPromptManager.resetForTesting()` çağırır → kullanıcı bir sonraki açılışta Onboarding'e döner. Hata olursa `wipeError` alert. CloudKit reset 2.1'de eklenecek
+- [ ] Settings → "Verilerimi indir" (2.5'in GDPR formatında JSON versiyonu) — 2.5 Backup/Restore içinde yapılacak
+- [x] In-app "Gizlilik Politikası" linki Settings'te: aboutSection'da `Link(destination:)` ile `https://haktancepik.github.io/Lexmind/privacy` + `/terms` (GitHub Pages, App Store Connect setup'ı sırasında aktifleşir)
+
+### 2.8 In-App Review Prompt
+- [x] `SKStoreReviewController.requestReview()` — 3. başarılı çalışma seansından sonra, 30 günde 1 kez: yeni `Services/ReviewPromptManager.swift` (`minSuccessfulSessions: 3`, `minDaysBetweenPrompts: 30`). StudyView seans bitince (`session.current == nil && session.sessionReviewed > 0`) `registerCompletedSession(reviewedCount:)` çağrılır; manager UserDefaults'a counter + lastPromptDate yazıp koşul sağlanıyorsa `true` döner → `@Environment(\.requestReview)` action tetiklenir
+- [x] `@AppStorage("lastReviewPrompt")` + session sayacı — `ReviewPromptManager.sessionCountKey` + `lastPromptKey` UserDefaults anahtarları
+- [x] **Etki:** App Store puanı için kritik, ortalama %30 daha yüksek puan
 
 ### 2.8 In-App Review Prompt
 - [ ] `SKStoreReviewController.requestReview()` — 3. başarılı çalışma seansından sonra, 30 günde 1 kez
