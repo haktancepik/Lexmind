@@ -17,6 +17,13 @@ struct SettingsView: View {
     @AppStorage("activeDeckID") private var activeDeckIDRaw = ""
     @AppStorage("rootTabSelection") private var rootTabSelection = 0
 
+    @AppStorage("notif.dailyEnabled") private var notifEnabled = false
+    @AppStorage("notif.reminderHour") private var notifHour = 19
+    @AppStorage("notif.reminderMinute") private var notifMinute = 30
+
+    @State private var notifAuthorization: NotificationScheduler.AuthorizationResult = .notDetermined
+    @State private var notifDeniedMessage: String?
+
     @State private var showWipeConfirm = false
     @State private var wipeError: String?
 
@@ -56,6 +63,12 @@ struct SettingsView: View {
             }
             .navigationTitle("Ayarlar")
             .onAppear(perform: ensureGoalExists)
+            .task { notifAuthorization = await NotificationScheduler.currentAuthorizationStatus() }
+            .alert("Bildirim izni reddedildi", isPresented: .constant(notifDeniedMessage != nil)) {
+                Button("Tamam") { notifDeniedMessage = nil }
+            } message: {
+                Text(notifDeniedMessage ?? "")
+            }
             .confirmationDialog(
                 "Tüm verilerin silinecek",
                 isPresented: $showWipeConfirm,
@@ -156,12 +169,33 @@ struct SettingsView: View {
     }
 
     private var notificationsSection: some View {
-        Section("Bildirimler") {
-            comingSoonRow(
-                title: "Günlük hatırlatma",
-                detail: "Faz 2'de aktifleşecek",
-                symbol: "bell"
-            )
+        Section {
+            Toggle(isOn: Binding(
+                get: { notifEnabled },
+                set: { newValue in Task { await handleNotifToggle(newValue) } }
+            )) {
+                Label("Günlük hatırlatma", systemImage: "bell")
+            }
+            if notifEnabled {
+                DatePicker(
+                    "Hatırlatma saati",
+                    selection: Binding(
+                        get: { dateFromHourMinute() },
+                        set: { newDate in handleTimeChanged(newDate) }
+                    ),
+                    displayedComponents: [.hourAndMinute]
+                )
+            }
+        } header: {
+            Text("Bildirimler")
+        } footer: {
+            if notifAuthorization == .denied {
+                Text("iOS Ayarlar'dan Lexmind için bildirim iznini açmadan hatırlatma planlanamaz.")
+                    .font(.caption)
+            } else if notifEnabled {
+                Text("Her gün seçtiğin saatte bekleyen tekrar için tek bildirim gönderilir.")
+                    .font(.caption)
+            }
         }
     }
 
@@ -250,6 +284,60 @@ struct SettingsView: View {
         } label: {
             Label(title, systemImage: symbol)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Notifications
+
+    /// Reacts to the daily-reminder toggle. If turning on, we lazily
+    /// ask for system permission (App Store guideline 5.4: prompt only
+    /// in response to user action). If the user denies, the toggle
+    /// snaps back off so the UI never lies about what's scheduled.
+    @MainActor
+    private func handleNotifToggle(_ newValue: Bool) async {
+        if newValue {
+            let status = await NotificationScheduler.currentAuthorizationStatus()
+            notifAuthorization = status
+
+            let granted: Bool
+            switch status {
+            case .granted:
+                granted = true
+            case .notDetermined:
+                granted = await NotificationScheduler.requestAuthorization()
+                notifAuthorization = granted ? .granted : .denied
+            case .denied:
+                granted = false
+            }
+
+            guard granted else {
+                notifEnabled = false
+                notifDeniedMessage = "Hatırlatma kurabilmek için iOS Ayarlar → Bildirimler → Lexmind'tan izin vermen gerekiyor."
+                return
+            }
+
+            notifEnabled = true
+            await NotificationScheduler.scheduleDailyReminder(hour: notifHour, minute: notifMinute)
+        } else {
+            notifEnabled = false
+            NotificationScheduler.cancelDailyReminder()
+        }
+    }
+
+    private func dateFromHourMinute() -> Date {
+        var components = DateComponents()
+        components.hour = notifHour
+        components.minute = notifMinute
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
+    private func handleTimeChanged(_ newDate: Date) {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+        notifHour = components.hour ?? 19
+        notifMinute = components.minute ?? 30
+        guard notifEnabled, notifAuthorization == .granted else { return }
+        Task {
+            await NotificationScheduler.scheduleDailyReminder(hour: notifHour, minute: notifMinute)
         }
     }
 

@@ -215,11 +215,11 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 - [ ] VoiceOver el ile test (iPhone'da Triple-click)
 
 ### 2.4 Push Notification (Retention için kritik)
-- [ ] Local notification yeter başta: günlük review reminder, streak hatırlatması
-- [ ] `Services/NotificationScheduler.swift` — kullanıcının review penceresine göre planla
-- [ ] Settings'te bildirim saati seçimi
-- [ ] **Bildirim izin promptu:** launch'ta DEĞİL, kullanıcı ilk kez "hatırlat" toggle'ına basınca iste (App Store guideline 5.4)
-- [ ] APNs capability + entitlement (remote notification gerekirse)
+- [x] Local notification yeter başta: günlük review reminder, streak hatırlatması (streak yan ürün — günlük tek reminder her saatte tetiklenir, içerik FSRS tekrar mesajı)
+- [x] `Services/NotificationScheduler.swift` — kullanıcının review penceresine göre planla: `UNUserNotificationCenter` wrapper enum. `currentAuthorizationStatus()` (granted/denied/notDetermined map), `requestAuthorization([.alert, .badge, .sound])`, `scheduleDailyReminder(hour:minute:)` (UNCalendarNotificationTrigger repeats=true, stable identifier `"daily-review-reminder"` — yeni schedule otomatik overwrite), `cancelDailyReminder()`
+- [x] Settings'te bildirim saati seçimi: notificationsSection Toggle + DatePicker(.hourAndMinute) (Toggle açıkken görünür). `@AppStorage("notif.dailyEnabled")` + `@AppStorage("notif.reminderHour")` (default 19) + `@AppStorage("notif.reminderMinute")` (default 30); saat değişimi `handleTimeChanged` ile re-schedule tetikler
+- [x] **Bildirim izin promptu:** launch'ta DEĞİL, kullanıcı ilk kez "hatırlat" toggle'ına basınca iste (App Store guideline 5.4): `handleNotifToggle(newValue: true)` → status `.notDetermined` ise `requestAuthorization()` çağrılır; reddedilirse Toggle otomatik off'a döner + denied alert ("iOS Ayarlar → Bildirimler → Lexmind'tan izin ver")
+- [x] APNs capability + entitlement (remote notification gerekirse) — gerek yok: local notification + UNCalendarNotificationTrigger remote push entitlement gerektirmez. APNs sadece sunucudan push göndermek istediğimizde lazım (Faz 3 sonrası)
 
 ### 2.5 Backup/Restore (manuel)
 - [x] Settings → "Verilerimi dışa aktar" (JSON dump: words + relations + cards + logs): yeni `Services/BackupService.swift` — versiyonlu Codable şema (currentVersion=1), WordDTO + CardDTO + RelationDTO + LogDTO + GoalDTO + DeckDTO. `export()` `[Word]/[DailyGoal]/[WordDeck]` fetch eder, JSON pretty-printed + sortedKeys + ISO8601 tarih. SettingsView dataSection'da Button → temp dir'e `lexmind-backup-<timestamp>.json` yazılır, `ShareLink` ile sistem share sheet. DailyReadingPassage atlandı (cache, regenerable)
