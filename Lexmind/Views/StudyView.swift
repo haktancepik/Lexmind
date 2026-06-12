@@ -10,6 +10,7 @@
 
 import SwiftUI
 import SwiftData
+import StoreKit
 import os
 
 struct StudyView: View {
@@ -17,6 +18,7 @@ struct StudyView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestReview) private var requestReview
     @Query private var words: [Word]
     @Query private var goals: [DailyGoal]
     @Query(sort: \WordDeck.sortOrder) private var decks: [WordDeck]
@@ -84,6 +86,15 @@ struct StudyView: View {
             }
             .task(id: words.count) {
                 existingTerms = Set(words.map { $0.term })
+            }
+            .onChange(of: session.current == nil) { _, isFinished in
+                // Session just ended (queue drained after the last grade).
+                // Don't ask if the user just dismissed early — only if
+                // they actually graded something this run.
+                guard isFinished, session.sessionReviewed > 0 else { return }
+                if ReviewPromptManager.registerCompletedSession(reviewedCount: session.sessionReviewed) {
+                    requestReview()
+                }
             }
             .overlay(alignment: .top) { addedToast }
             .popover(
