@@ -40,11 +40,14 @@ enum Log {
 }
 
 /// Shared `OSSignposter` instances used to bracket critical work so
-/// Instruments can chart latency / throughput per subsystem. Names
-/// match `Log` categories one-to-one.
+/// Instruments can chart latency / throughput. All four use the
+/// reserved `PointsOfInterest` category so the default Instruments
+/// "Points of Interest" track in Time Profiler / POI templates picks
+/// them up automatically — interval names (`loadCommon`, `importWords`,
+/// `schedule`, `generatePassage`, …) keep them distinguishable.
 enum Signpost {
-    static let importer = OSSignposter(subsystem: Log.subsystem, category: "services.importer")
-    static let fsrs = OSSignposter(subsystem: Log.subsystem, category: "fsrs")
-    static let ai = OSSignposter(subsystem: Log.subsystem, category: "services.ai")
-    static let library = OSSignposter(subsystem: Log.subsystem, category: "services.library")
+    static let importer = OSSignposter(subsystem: Log.subsystem, category: "PointsOfInterest")
+    static let fsrs = OSSignposter(subsystem: Log.subsystem, category: "PointsOfInterest")
+    static let ai = OSSignposter(subsystem: Log.subsystem, category: "PointsOfInterest")
+    static let library = OSSignposter(subsystem: Log.subsystem, category: "PointsOfInterest")
 }
