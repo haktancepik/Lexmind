@@ -222,8 +222,8 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 - [ ] APNs capability + entitlement (remote notification gerekirse)
 
 ### 2.5 Backup/Restore (manuel)
-- [ ] Settings → "Verilerimi dışa aktar" (JSON dump: words + relations + cards + logs)
-- [ ] "Verilerimi içe aktar" (validation + dry run + confirm)
+- [x] Settings → "Verilerimi dışa aktar" (JSON dump: words + relations + cards + logs): yeni `Services/BackupService.swift` — versiyonlu Codable şema (currentVersion=1), WordDTO + CardDTO + RelationDTO + LogDTO + GoalDTO + DeckDTO. `export()` `[Word]/[DailyGoal]/[WordDeck]` fetch eder, JSON pretty-printed + sortedKeys + ISO8601 tarih. SettingsView dataSection'da Button → temp dir'e `lexmind-backup-<timestamp>.json` yazılır, `ShareLink` ile sistem share sheet. DailyReadingPassage atlandı (cache, regenerable)
+- [x] "Verilerimi içe aktar" (validation + dry run + confirm): `fileImporter` (.json) → `importPayload(data:, dryRun: true)` özet (toplam kelime, yeni eklenecek, atlanacak, log sayısı, deste sayısı, hedef üzerine yazılacak mı) → confirm sheet → onaylarsa `importPayload(data:, dryRun: false)` ile gerçek merge. Idempotent: term'e göre dedupe (Word), name'e göre dedupe (user deck), preset deck payload'tan değil bootstrap'ten gelir; ilk goal payload'ki ile overwrite. Cards/relations/logs ilişkili Word ile insert
 
 ### 2.6 Crash Reporting — MetricKit yeter
 - [x] MetricKit yeterli, Sentry ekleme — privacy maliyeti vs detay düşük ROI (1.8'de yapıldı: `MetricKitObserver` MXMetricManagerSubscriber, daily payload + crash/hang/cpuException/diskWrite diagnostic summary'leri `Log.metrics`'e düşüyor)
@@ -232,7 +232,7 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 
 ### 2.7 GDPR / KVKK Veri Akışları
 - [x] Settings → "Tüm verilerimi sil" (one-shot DELETE FROM Word/Card/Log + CloudKit reset): SettingsView dataSection'da `.destructive` Button + confirmationDialog (yıkıcı uyarı + Vazgeç/Sil). `wipeAllData()` 7 entity'yi (`ReviewLog`/`FSRSCard`/`WordRelation`/`Word`/`WordDeck`/`DailyReadingPassage`/`DailyGoal`) `try context.delete(model:)` ile siler, AppStorage'ları (`hasCompletedOnboarding`, `preferredCEFRLevel`, `activeDeckID`, `rootTabSelection`) sıfırlar, `ReviewPromptManager.resetForTesting()` çağırır → kullanıcı bir sonraki açılışta Onboarding'e döner. Hata olursa `wipeError` alert. CloudKit reset 2.1'de eklenecek
-- [ ] Settings → "Verilerimi indir" (2.5'in GDPR formatında JSON versiyonu) — 2.5 Backup/Restore içinde yapılacak
+- [x] Settings → "Verilerimi indir" (2.5'in GDPR formatında JSON versiyonu): 2.5 Backup/Restore ile aynı altyapı — `BackupService.export()` GDPR data portability hakkını otomatik karşılıyor (kullanıcı tüm kelimelerini, ilerlemesini, deste yapısını ve log geçmişini tek JSON olarak alabilir)
 - [x] In-app "Gizlilik Politikası" linki Settings'te: aboutSection'da `Link(destination:)` ile `https://haktancepik.github.io/Lexmind/privacy` + `/terms` (GitHub Pages, App Store Connect setup'ı sırasında aktifleşir)
 
 ### 2.8 In-App Review Prompt
