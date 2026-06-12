@@ -12,11 +12,19 @@ struct HomeView: View {
     @Query private var goals: [DailyGoal]
     @Query(sort: \ReviewLog.reviewedAt, order: .reverse) private var reviewLogs: [ReviewLog]
 
-    @State private var model = HomeModel()
     @State private var showAddWord = false
     @State private var showStudy = false
     @State private var showLibrary = false
     @State private var showReading = false
+
+    /// Built fresh on every body re-evaluation so per-record mutations
+    /// (e.g. a card's `due` shifting after a review) propagate even
+    /// when the @Query array's count is unchanged.
+    private var model: HomeModel {
+        let m = HomeModel()
+        m.sync(words: words, goals: goals, reviewLogs: reviewLogs)
+        return m
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,12 +47,8 @@ struct HomeView: View {
             }
             .navigationTitle("Lexmind")
             .onAppear {
-                syncModel()
-                model.ensureGoalExists(in: context)
+                HomeModel.ensureGoalExists(currentGoals: goals, in: context)
             }
-            .onChange(of: words.count) { _, _ in syncModel() }
-            .onChange(of: goals.count) { _, _ in syncModel() }
-            .onChange(of: reviewLogs.count) { _, _ in syncModel() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -80,10 +84,6 @@ struct HomeView: View {
                 }
             }
         }
-    }
-
-    private func syncModel() {
-        model.sync(words: words, goals: goals, reviewLogs: reviewLogs)
     }
 
     private var emptyHeroCard: some View {

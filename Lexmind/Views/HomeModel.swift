@@ -26,10 +26,23 @@ final class HomeModel {
         self.reviewLogs = reviewLogs
     }
 
-    func ensureGoalExists(in context: ModelContext) {
-        guard goals.isEmpty else { return }
+    /// Stateless helper so callers can guarantee a `DailyGoal` exists
+    /// without having to construct + sync a model first.
+    static func ensureGoalExists(currentGoals: [DailyGoal], in context: ModelContext) {
+        guard currentGoals.isEmpty else { return }
         context.insert(DailyGoal())
         try? context.save()
+    }
+
+    /// Hour-injectable greeting variant so unit tests don't depend on
+    /// the system clock.
+    static func greeting(forHour hour: Int) -> String {
+        switch hour {
+        case 5..<12: return "Günaydın 👋"
+        case 12..<17: return "İyi günler 👋"
+        case 17..<22: return "İyi akşamlar 👋"
+        default: return "Merhaba 👋"
+        }
     }
 
     // MARK: - Derived metrics
@@ -73,11 +86,6 @@ final class HomeModel {
 
     var greeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
-        switch hour {
-        case 5..<12: return "Günaydın 👋"
-        case 12..<17: return "İyi günler 👋"
-        case 17..<22: return "İyi akşamlar 👋"
-        default: return "Merhaba 👋"
-        }
+        return Self.greeting(forHour: hour)
     }
 }
