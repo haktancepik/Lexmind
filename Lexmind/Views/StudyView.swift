@@ -19,6 +19,7 @@ struct StudyView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var words: [Word]
     @Query private var goals: [DailyGoal]
     @Query(sort: \WordDeck.sortOrder) private var decks: [WordDeck]
@@ -267,7 +268,7 @@ struct StudyView: View {
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(.green.opacity(0.4), lineWidth: 1))
             .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
     }
 

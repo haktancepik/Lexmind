@@ -52,6 +52,8 @@ struct AddWordView: View {
                         }
                         .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty || isAnalyzing)
                         .buttonStyle(.borderedProminent)
+                        .accessibilityLabel(Text(isAnalyzing ? "Analiz ediliyor" : "AI ile analiz et"))
+                        .accessibilityHint(Text("Apple Intelligence ile kelimenin anlamını, IPA ve örneklerini doldurur"))
                     }
                     if let message = analyzer.availabilityMessage {
                         Label(message, systemImage: "exclamationmark.triangle.fill")
@@ -125,6 +127,7 @@ struct AddWordView: View {
                         Task { await save() }
                     }
                     .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                    .accessibilityHint(Text("Kelimeyi kütüphaneye ekler ve formu kapatır"))
                 }
             }
             .task {

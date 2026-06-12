@@ -78,6 +78,7 @@ struct DeckDetailView: View {
                 } label: {
                     Label("Kelime Ekle", systemImage: "plus")
                 }
+                .accessibilityHint(Text("Bu desteye mevcut kelimeleri toplu ekler"))
             }
         }
         .sheet(isPresented: $showAddSheet) {
@@ -97,6 +98,7 @@ struct DeckDetailView: View {
                 .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
+        .accessibilityHint(Text("Çalış sekmesini bu desteyle açar"))
     }
 
     private func studyThisDeck() {
@@ -141,6 +143,17 @@ struct DeckDetailView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(deckRowAccessibilityLabel(word)))
+        .accessibilityHint(Text("Kelime detayını açar"))
+    }
+
+    private func deckRowAccessibilityLabel(_ word: Word) -> String {
+        var parts: [String] = [word.displayName]
+        if !word.partOfSpeech.isEmpty { parts.append(word.partOfSpeech) }
+        if let lv = word.level { parts.append("CEFR \(lv.label)") }
+        if !word.turkishMeaning.isEmpty { parts.append(word.turkishMeaning) }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

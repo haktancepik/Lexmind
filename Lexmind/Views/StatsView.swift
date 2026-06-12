@@ -127,6 +127,8 @@ struct StatsView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(title): \(value)"))
     }
 
     private var reviewsChart: some View {
@@ -138,6 +140,8 @@ struct StatsView: View {
                 )
                 .foregroundStyle(Color.accentColor.gradient)
                 .cornerRadius(4)
+                .accessibilityLabel(Text(item.day.formatted(.dateTime.day().month())))
+                .accessibilityValue(Text("\(item.count) tekrar"))
             }
             .frame(height: 180)
             .chartXAxis {
@@ -146,6 +150,7 @@ struct StatsView: View {
                     AxisValueLabel(format: .dateTime.day().month(.narrow))
                 }
             }
+            .accessibilityLabel(Text("Son 14 günün günlük tekrar sayısı grafiği"))
         }
     }
 
@@ -164,6 +169,8 @@ struct StatsView: View {
                     )
                     .foregroundStyle(by: .value("Tepki", item.rating.label))
                     .cornerRadius(4)
+                    .accessibilityLabel(Text(item.rating.label))
+                    .accessibilityValue(Text("\(item.count) tekrar"))
                 }
                 .frame(height: 200)
                 .chartForegroundStyleScale([
@@ -172,6 +179,7 @@ struct StatsView: View {
                     ReviewRating.good.label: Color.green,
                     ReviewRating.easy.label: Color.blue
                 ])
+                .accessibilityLabel(Text("Cevap derecelendirmelerinin dağılımı"))
             }
         }
     }
@@ -190,6 +198,8 @@ struct StatsView: View {
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityLabel(Text(item.state.label))
+                .accessibilityValue(Text("\(item.count) kelime"))
             }
             .frame(height: 200)
             .chartForegroundStyleScale([
@@ -198,6 +208,7 @@ struct StatsView: View {
                 CardState.review.label: Color.green,
                 CardState.relearning.label: Color.orange
             ])
+            .accessibilityLabel(Text("FSRS kart durumlarının dağılımı"))
         }
     }
 

@@ -17,6 +17,7 @@ import os
 struct WordDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var word: Word
     @Query private var allWords: [Word]
 
@@ -221,7 +222,10 @@ struct WordDetailView: View {
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(.green.opacity(0.4), lineWidth: 1))
             .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            // Move + opacity slides the toast in from above; Reduce Motion
+            // users get a simple fade so VoiceOver isn't paired with a
+            // motion cue they explicitly disabled.
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
     }
 

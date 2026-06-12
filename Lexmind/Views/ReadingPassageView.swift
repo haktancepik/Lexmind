@@ -308,6 +308,8 @@ struct ReadingPassageView: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(item.term))
+                .accessibilityHint(Text("Kelime için hızlı bakış kartını açar"))
 
                 if !item.partOfSpeech.isEmpty {
                     Text(item.partOfSpeech)
@@ -370,6 +372,7 @@ struct ReadingPassageView: View {
                 Label("Tekrar Dene", systemImage: "arrow.clockwise")
                     .frame(maxWidth: .infinity)
             }
+            .accessibilityHint(Text("Okuma metni oluşturmayı yeniden başlatır"))
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
         }
@@ -406,6 +409,7 @@ struct ReadingPassageView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(isGenerating)
+                .accessibilityHint(Text("Mevcut metni siler ve yeni bir okuma metni oluşturur"))
             }
         }
     }
@@ -430,6 +434,8 @@ struct ReadingPassageView: View {
                                     .foregroundStyle(Color.accentColor)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(Text(term))
+                            .accessibilityHint(Text("Kelime için hızlı bakış kartını açar"))
                         }
                     }
                 }
