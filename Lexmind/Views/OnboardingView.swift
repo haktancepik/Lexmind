@@ -338,6 +338,9 @@ struct OnboardingView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(level.label) — \(levelDescription(level))"))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func levelDescription(_ level: CEFRLevel) -> String {

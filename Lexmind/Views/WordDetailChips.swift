@@ -55,6 +55,17 @@ struct WordDetailChipsRow: View {
             .foregroundStyle(termExists(item.term) ? Color.accentColor : Color.primary)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityLabel(for: item)))
+        .accessibilityHint(Text(termExists(item.term)
+            ? "Bu kelimenin detayını açar"
+            : "Bu kelimeyi kütüphaneye eklemek için onay sorulur"))
+    }
+
+    private func accessibilityLabel(for item: WordDetailRelationChip) -> String {
+        let originLabel = item.origin == .verified ? "doğrulanmış" : "AI tahmini"
+        let stateLabel = termExists(item.term) ? "kütüphanede" : "henüz eklenmedi"
+        return "\(item.term), \(originLabel), \(stateLabel)"
     }
 
     /// Verified chips stay green; AI chips switch between accent (term
@@ -83,6 +94,8 @@ struct WordDetailLoadingRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(text))
     }
 }
 
@@ -96,6 +109,8 @@ struct WordDetailVerifyingBadge: View {
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("İlişkiler doğrulanıyor"))
     }
 }
 

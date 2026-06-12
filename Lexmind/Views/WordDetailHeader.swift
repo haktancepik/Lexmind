@@ -20,9 +20,11 @@ struct WordDetailHeader: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(word.displayName)
                     .font(.system(.largeTitle, design: .serif, weight: .bold))
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 if isRegenerating {
                     ProgressView()
+                        .accessibilityLabel(Text("Yeniden analiz ediliyor"))
                 }
             }
             tagRow
@@ -56,6 +58,27 @@ struct WordDetailHeader: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(combinedTagLabel))
+    }
+
+    /// Joins every visible tag into a single VoiceOver utterance —
+    /// otherwise users would swipe through 5+ decorative capsules.
+    private var combinedTagLabel: String {
+        var parts: [String] = []
+        if !word.partOfSpeech.isEmpty { parts.append(word.partOfSpeech) }
+        if !word.countability.isEmpty,
+           word.countability.lowercased() != "n/a" {
+            parts.append(word.countability)
+        }
+        if let state = word.card?.state {
+            parts.append("FSRS durumu: \(state.label)")
+        }
+        if let lv = word.level {
+            parts.append("CEFR \(lv.label)")
+        }
+        for tp in word.topics { parts.append(tp.label) }
+        return parts.joined(separator: ", ")
     }
 
     private func tag(_ text: String, color: Color) -> some View {

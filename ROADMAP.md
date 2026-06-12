@@ -205,14 +205,13 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 - [ ] Feature gate'ler: `AddWordView` limit kontrolü, `LibraryImportView` Pro badge
 
 ### 2.3 Accessibility Pass (somut hedef)
-**Mevcut taban:** sadece 1 `accessibilityLabel` var. Reviewer için kabul edilemez.
+**Mevcut taban (Pass A öncesi):** sadece 3 `accessibilityLabel` vardı. Reviewer için kabul edilemez.
 
-- [ ] Hedef: 100+ `accessibilityLabel`, 30+ `accessibilityHint`, 0 VoiceOver dead-end
-- [ ] Tüm rating button, stat card, chip, badge, navigation interactive element'i
-- [ ] Dynamic Type: tüm view'ları en büyük setting'de aç, kırılanları `ScrollView` veya `Layout` ile çöz
-- [ ] Reduce Motion: animasyon'lar `@Environment(\.accessibilityReduceMotion)` ile koşullu
-- [ ] Color contrast: WCAG AA (özellikle CEFR tint renkleri)
-- [ ] VoiceOver el ile test (iPhone'da Triple-click)
+- [ ] Hedef: 100+ `accessibilityLabel`, 30+ `accessibilityHint`, 0 VoiceOver dead-end (şu an Pass A sonrası 22 + 17 — Pass B/C ile DeckDetail/Stats/AddWord/ReadingPassage eklenince hedefe ulaşılacak)
+- [x] **Pass A — interactive elementler:** StudyRatingControls (4 rating + reveal button — kritik), HomeView (statCard kombine, heroCard CTA, readingCard, emptyHero CTA'ları), WordDetailHeader (combinedTagLabel — 5+ chip tek utterance'a), WordDetailChips (chip a11y label "term, doğrulanmış/AI, kütüphanede/yeni" + hint, loading row + verifying badge), DecksView (preset/user row + plus toolbar), WordQuickLookupCard (Detay Aç + Listeme Ekle + Tekrar dene hint'leri), LibraryImportPresetDecks (tile a11y label "X seviyesi, N kelime, M yeni"), LibraryImportFilterChips (chip + selected trait), LibraryImportWordRow (button hint), OnboardingView (level button combined label + selected trait), WordsListView (row a11y label term + POS + CEFR + meaning + state combine)
+- [ ] **Pass B — Dynamic Type + kalan view'lar:** DeckDetailView, StatsView, AddWordView, ReadingPassageView; en büyük setting'de aç, kırılanları `ScrollView` veya `Layout` ile çöz
+- [ ] **Pass C — Reduce Motion + Color contrast:** animasyon'lar `@Environment(\.accessibilityReduceMotion)` ile koşullu, CEFR tint renkleri WCAG AA
+- [ ] VoiceOver el ile test (iPhone'da Triple-click — manuel adım, kullanıcı tarafı)
 
 ### 2.4 Push Notification (Retention için kritik)
 - [x] Local notification yeter başta: günlük review reminder, streak hatırlatması (streak yan ürün — günlük tek reminder her saatte tetiklenir, içerik FSRS tekrar mesajı)

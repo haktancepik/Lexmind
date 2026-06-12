@@ -60,6 +60,7 @@ struct WordQuickLookupCard: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityHint(Text("\(term) için anlam aramayı yeniden başlatır"))
             }
         }
     }
@@ -121,6 +122,7 @@ struct WordQuickLookupCard: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityHint(Text("\(term) kelimesinin detay sayfasını açar"))
             }
         } else {
             Button {
@@ -140,6 +142,8 @@ struct WordQuickLookupCard: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .disabled(isAdding)
+            .accessibilityLabel(Text(isAdding ? "Ekleniyor" : "Listeme ekle"))
+            .accessibilityHint(Text("\(term) kelimesini kütüphaneye ekler"))
         }
     }
 

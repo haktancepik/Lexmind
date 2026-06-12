@@ -77,7 +77,10 @@ struct LibraryImportWordRow: View {
             }
             .buttonStyle(.plain)
             .disabled(alreadyAdded)
-            .accessibilityLabel(alreadyAdded ? "Ekli" : "Ekle")
+            .accessibilityLabel(Text(alreadyAdded ? "Ekli" : "Ekle"))
+            .accessibilityHint(Text(alreadyAdded
+                ? "Bu kelime zaten kütüphanende"
+                : "\(word.term) kelimesini kütüphaneye ekler"))
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())

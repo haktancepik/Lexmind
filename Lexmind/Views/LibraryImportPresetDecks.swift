@@ -60,5 +60,10 @@ struct LibraryImportPresetDecks: View {
         }
         .buttonStyle(.plain)
         .disabled(newCount == 0 || isImporting)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(level.label) seviyesi, \(words.count) kelime, \(newCount) yeni"))
+        .accessibilityHint(Text(newCount == 0
+            ? "Bu seviye zaten tamamen kütüphanende"
+            : "\(level.label) seviyesindeki yeni kelimeleri kütüphaneye ekler"))
     }
 }

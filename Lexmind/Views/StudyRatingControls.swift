@@ -43,10 +43,15 @@ struct StudyRatingControls: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(Self.color(for: rating))
+                .accessibilityLabel(Text(accessibilityLabel(for: rating)))
+                .accessibilityValue(Text(session.previewInterval(for: word, rating: rating)))
+                .accessibilityHint(Text("Bu derecelendirme bir sonraki tekrar tarihini belirler"))
             }
         }
         .padding(.horizontal)
         .padding(.bottom, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Kelime derecelendirme satırı"))
     }
 
     private var revealButton: some View {
@@ -58,6 +63,17 @@ struct StudyRatingControls: View {
         .controlSize(.large)
         .padding(.horizontal)
         .padding(.bottom, 12)
+        .accessibilityLabel(Text("Cevabı göster"))
+        .accessibilityHint(Text("Kartı çevirir ve derecelendirme seçeneklerini açar"))
+    }
+
+    private func accessibilityLabel(for rating: ReviewRating) -> String {
+        switch rating {
+        case .again: return "Tekrar — hatırlamadım"
+        case .hard:  return "Zor — güçlükle hatırladım"
+        case .good:  return "İyi — hatırladım"
+        case .easy:  return "Kolay — kolayca hatırladım"
+        }
     }
 
     static func color(for rating: ReviewRating) -> Color {

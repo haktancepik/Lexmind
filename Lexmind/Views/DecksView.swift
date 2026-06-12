@@ -109,6 +109,8 @@ struct DecksView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel(Text("Deste ekle"))
+                    .accessibilityHint(Text("Yeni deste oluştur veya birden fazla desteyi birleştir"))
                 }
             }
             .sheet(isPresented: $showNewDeckSheet) {
@@ -163,6 +165,9 @@ struct DecksView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Hazır \(deck.name) destesi, \(deck.words.count) kelime"))
+        .accessibilityHint(Text("Destenin içeriğini açar"))
     }
 
     @ViewBuilder
@@ -180,6 +185,9 @@ struct DecksView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(deck.name) destesi, \(deck.words.count) kelime"))
+        .accessibilityHint(Text("Destenin içeriğini açar. Sağa kaydırarak yeniden adlandırabilir ya da silebilirsin"))
     }
 
     @ViewBuilder

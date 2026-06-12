@@ -110,6 +110,7 @@ struct HomeView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 4)
+            .accessibilityHint(Text("CEFR seviyeli 5000+ kelimeden seçmek için kütüphaneyi açar"))
 
             Button {
                 showAddWord = true
@@ -119,6 +120,7 @@ struct HomeView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
+            .accessibilityHint(Text("Tek bir İngilizce kelimeyi manuel olarak eklemek için form açar"))
         }
         .padding(20)
         .background(
@@ -168,6 +170,9 @@ struct HomeView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 4)
+            .accessibilityHint(Text(model.dueCount > 0
+                ? "Bugünün tekrar kuyruğunu açar"
+                : "Yeni kelimelerden bir çalışma seansı başlatır"))
         }
         .padding(20)
         .background(
@@ -215,6 +220,9 @@ struct HomeView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Bugünün okuma metni"))
+        .accessibilityHint(Text("Bugün çalıştığın \(model.reviewedTodayCount) kelime üzerinden bağlamlı bir okuma metni açar"))
     }
 
     private var statsRow: some View {
@@ -239,6 +247,8 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(label): \(value) kelime"))
     }
 
     private var upcomingSection: some View {

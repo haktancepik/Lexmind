@@ -77,5 +77,10 @@ struct LibraryImportFilterChips: View {
                 .foregroundStyle(isSelected ? tint : Color.primary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+        .accessibilityHint(Text(isSelected
+            ? "Filtreyi kapat"
+            : "Listeyi sadece \(title) ile filtrele"))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

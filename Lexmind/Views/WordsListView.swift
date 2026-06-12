@@ -179,6 +179,23 @@ struct WordsListView: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(wordRowAccessibilityLabel(word)))
+        .accessibilityHint(Text("Kelime detayını açar"))
+    }
+
+    /// Pre-combines the row into one VoiceOver utterance so users don't
+    /// have to swipe through 5 separate Text + Capsule + badge sublabels.
+    private func wordRowAccessibilityLabel(_ word: Word) -> String {
+        var parts: [String] = [word.displayName]
+        if !word.partOfSpeech.isEmpty { parts.append(word.partOfSpeech) }
+        if let lv = word.level { parts.append("CEFR \(lv.label)") }
+        if !word.turkishMeaning.isEmpty { parts.append(word.turkishMeaning) }
+        if let card = word.card {
+            parts.append(stateLabel(for: word))
+            parts.append(Date().timeIntervalSince(card.due) >= 0 ? "vakti geldi" : "yaklaşan")
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
