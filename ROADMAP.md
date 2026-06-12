@@ -55,7 +55,7 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 
 #### 1.3.1 JSON Lazy Loading
 - [x] `CommonWordsLibrary` ve `OxfordWordsLibrary`'ye `preload() async` eklendi (`Task.detached(.utility)` ile arka planda warm-up); `LibraryImportView` `.task` içinden iki kütüphaneyi paralel preload ediyor, hazır olana kadar `ProgressView`. Lookup callsite'ları (StudyView, WordDetailView, ReadingPassageView, AddWordView) view appear'da preload tetikliyor — popover ilk açıldığında main thread'de senkron JSON decode olmuyor
-- [ ] Instruments Time Profiler ile app launch'ta JSON decode süresini ölç — hedef <500ms (manuel adım — kullanıcı tarafında doğrulanacak)
+- [x] Instruments Time Profiler ile app launch'ta JSON decode süresini ölç — hedef <500ms (ÖLÇÜLDÜ 2026-06-12 iPhone 15 Pro sim, iOS 26.1, Release build): **loadCommon = 8.69 ms, loadOxford = 7.69 ms** (Points of Interest signpost interval'leri). Hedefin 60× altında. `Task.detached(.utility)` arka plan preload'u main thread'i hiç bloke etmiyor — POI track'te schedule (FSRS) mikrosaniye düzeyinde, importWords (onboarding bulk insert) async 4 s ama UI'da görünmüyor. Ölçüm altyapısı için `Signpost.library` eklendi (`loadCommon`/`loadOxford` interval'leri), tüm signposters `PointsOfInterest` category'sine taşındı (default Instruments POI track yakalasın)
 
 #### 1.3.2 Force Unwrap Temizliği
 - [x] Denetim (2026-06-10): kod tabanında prod kodunda 0 force unwrap, 0 `as!`, 0 `try!`. Roadmap'in başında yapılan "120+" tahmini stale çıktı — son commit'lerle (1.0/1.1/1.2/1.3.5) zaten temizlenmiş. `Word.card!` pattern'i de hiç yok; SwiftData ilişkileri her yerde `if let card = word.card` ile ele alınıyor
