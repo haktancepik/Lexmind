@@ -18,11 +18,19 @@ import SwiftData
 @MainActor
 struct FSRSSchedulerTests {
 
-    // MARK: - Helpers
+    // MARK: - Fixtures
+    //
+    // The container is owned by the test struct so it outlives every
+    // helper-returned `FSRSCard`. Returning a card from a helper that
+    // owned its container locally would crash with
+    // "model instance was destroyed" the moment the helper returned,
+    // because ARC tore down the in-memory container.
 
-    private func makeContainer() throws -> ModelContainer {
+    let container: ModelContainer
+
+    init() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(
+        container = try ModelContainer(
             for: Word.self, FSRSCard.self, ReviewLog.self,
                  DailyGoal.self, WordRelation.self, DailyReadingPassage.self,
             configurations: config
@@ -36,8 +44,7 @@ struct FSRSSchedulerTests {
         reps: Int = 0,
         lapses: Int = 0,
         lastReview: Date? = nil
-    ) throws -> FSRSCard {
-        let container = try makeContainer()
+    ) -> FSRSCard {
         let card = FSRSCard(
             stability: stability,
             difficulty: difficulty,
@@ -62,7 +69,7 @@ struct FSRSSchedulerTests {
             (.easy,  15.69105)
         ]
         for (rating, expected) in cases {
-            let card = try makeCard()
+            let card = makeCard()
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(
                 abs(result.stability - expected) < 1e-4,
@@ -74,7 +81,7 @@ struct FSRSSchedulerTests {
     @Test func newCard_initialDifficulty_inBounds() throws {
         let scheduler = FSRSScheduler()
         for rating in ReviewRating.allCases {
-            let card = try makeCard()
+            let card = makeCard()
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(result.difficulty >= 1, "rating \(rating) under-bound: \(result.difficulty)")
             #expect(result.difficulty <= 10, "rating \(rating) over-bound: \(result.difficulty)")
@@ -92,7 +99,7 @@ struct FSRSSchedulerTests {
             (.easy,  .review)
         ]
         for (rating, expected) in expectations {
-            let card = try makeCard()
+            let card = makeCard()
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(result.state == expected, "rating \(rating): got \(result.state)")
         }
@@ -103,7 +110,7 @@ struct FSRSSchedulerTests {
     @Test func learningState_again_or_hard_staysLearning() throws {
         let scheduler = FSRSScheduler()
         for rating in [ReviewRating.again, .hard] {
-            let card = try makeCard(state: .learning, stability: 1.0, difficulty: 5.0, reps: 1)
+            let card = makeCard(state: .learning, stability: 1.0, difficulty: 5.0, reps: 1)
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(result.state == .learning, "rating \(rating) should stay .learning")
         }
@@ -112,7 +119,7 @@ struct FSRSSchedulerTests {
     @Test func learningState_good_or_easy_movesToReview() throws {
         let scheduler = FSRSScheduler()
         for rating in [ReviewRating.good, .easy] {
-            let card = try makeCard(state: .learning, stability: 1.0, difficulty: 5.0, reps: 1)
+            let card = makeCard(state: .learning, stability: 1.0, difficulty: 5.0, reps: 1)
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(result.state == .review, "rating \(rating) should move to .review")
         }
@@ -123,7 +130,7 @@ struct FSRSSchedulerTests {
     @Test func reviewState_again_movesToRelearning_andLapsesIncrement() throws {
         let scheduler = FSRSScheduler()
         let last = Date.now.addingTimeInterval(-5 * 86_400)
-        let card = try makeCard(
+        let card = makeCard(
             state: .review, stability: 5, difficulty: 6, reps: 3, lapses: 1, lastReview: last
         )
         let result = scheduler.schedule(card: card, rating: .again)
@@ -135,7 +142,7 @@ struct FSRSSchedulerTests {
         let scheduler = FSRSScheduler()
         for rating in [ReviewRating.hard, .good, .easy] {
             let last = Date.now.addingTimeInterval(-3 * 86_400)
-            let card = try makeCard(
+            let card = makeCard(
                 state: .review, stability: 4, difficulty: 5, reps: 5, lapses: 2, lastReview: last
             )
             let result = scheduler.schedule(card: card, rating: rating)
@@ -148,7 +155,7 @@ struct FSRSSchedulerTests {
 
     @Test func relearningState_again_staysRelearning_andLapsesIncrement() throws {
         let scheduler = FSRSScheduler()
-        let card = try makeCard(state: .relearning, stability: 1, difficulty: 7, reps: 4, lapses: 1)
+        let card = makeCard(state: .relearning, stability: 1, difficulty: 7, reps: 4, lapses: 1)
         let result = scheduler.schedule(card: card, rating: .again)
         #expect(result.state == .relearning)
         #expect(result.lapses == 2)
@@ -157,7 +164,7 @@ struct FSRSSchedulerTests {
     @Test func relearningState_good_or_easy_movesToReview() throws {
         let scheduler = FSRSScheduler()
         for rating in [ReviewRating.good, .easy] {
-            let card = try makeCard(state: .relearning, stability: 1, difficulty: 7, reps: 4)
+            let card = makeCard(state: .relearning, stability: 1, difficulty: 7, reps: 4)
             let result = scheduler.schedule(card: card, rating: rating)
             #expect(result.state == .review, "rating \(rating) should move to .review")
         }
@@ -169,7 +176,7 @@ struct FSRSSchedulerTests {
         let scheduler = FSRSScheduler()
         for state in CardState.allCases {
             for rating in ReviewRating.allCases {
-                let card = try makeCard(state: state, stability: 1, difficulty: 5, reps: 7)
+                let card = makeCard(state: state, stability: 1, difficulty: 5, reps: 7)
                 let result = scheduler.schedule(card: card, rating: rating)
                 #expect(
                     result.reps == 8,
@@ -185,7 +192,7 @@ struct FSRSSchedulerTests {
         let scheduler = FSRSScheduler()
         for state in CardState.allCases {
             for rating in ReviewRating.allCases {
-                let card = try makeCard(state: state, stability: 2, difficulty: 5)
+                let card = makeCard(state: state, stability: 2, difficulty: 5)
                 let result = scheduler.schedule(card: card, rating: rating)
                 #expect(result.difficulty >= 1, "underbound at \(state)/\(rating)")
                 #expect(result.difficulty <= 10, "overbound at \(state)/\(rating)")
@@ -199,7 +206,7 @@ struct FSRSSchedulerTests {
         let scheduler = FSRSScheduler()
         let last = Date.now.addingTimeInterval(-2 * 86_400)
         func stability(after rating: ReviewRating) throws -> Double {
-            let card = try makeCard(
+            let card = makeCard(
                 state: .review, stability: 5, difficulty: 5, reps: 4, lastReview: last
             )
             return scheduler.schedule(card: card, rating: rating).stability
@@ -216,7 +223,7 @@ struct FSRSSchedulerTests {
     @Test func elapsedDays_clampsToZero_whenNowIsBeforeLastReview() throws {
         let scheduler = FSRSScheduler()
         let last = Date.now
-        let card = try makeCard(
+        let card = makeCard(
             state: .review, stability: 5, difficulty: 5, reps: 3, lastReview: last
         )
         // Simulate clock going backward by 1 day.
@@ -228,7 +235,7 @@ struct FSRSSchedulerTests {
     @Test func longGap_doesNotCrash_andProducesFiniteStability() throws {
         let scheduler = FSRSScheduler()
         let last = Date.now.addingTimeInterval(-365 * 86_400)
-        let card = try makeCard(
+        let card = makeCard(
             state: .review, stability: 2, difficulty: 6, reps: 5, lastReview: last
         )
         let result = scheduler.schedule(card: card, rating: .good)
@@ -242,7 +249,7 @@ struct FSRSSchedulerTests {
     @Test func newCard_again_dueWithinShortLearningWindow() throws {
         let scheduler = FSRSScheduler()
         let now = Date.now
-        let card = try makeCard()
+        let card = makeCard()
         let result = scheduler.schedule(card: card, rating: .again, now: now)
         // again on .new path → scheduledDays = 0 → due = now + 60s
         let delta = result.due.timeIntervalSince(now)
@@ -253,7 +260,7 @@ struct FSRSSchedulerTests {
     @Test func newCard_easy_dueAtLeastOneDayAway() throws {
         let scheduler = FSRSScheduler()
         let now = Date.now
-        let card = try makeCard()
+        let card = makeCard()
         let result = scheduler.schedule(card: card, rating: .easy, now: now)
         let delta = result.due.timeIntervalSince(now)
         #expect(delta >= 86_400 - 1, "easy on new should be at least 1 day away, got \(delta)s")
@@ -263,7 +270,7 @@ struct FSRSSchedulerTests {
 
     @Test func apply_writesResultBackToCard() throws {
         let scheduler = FSRSScheduler()
-        let card = try makeCard(state: .review, stability: 4, difficulty: 5, reps: 3, lastReview: .now)
+        let card = makeCard(state: .review, stability: 4, difficulty: 5, reps: 3, lastReview: .now)
         let result = scheduler.schedule(card: card, rating: .good)
         scheduler.apply(result: result, to: card)
         #expect(card.stability == result.stability)
