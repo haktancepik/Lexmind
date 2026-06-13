@@ -293,7 +293,7 @@ Amaç: TAM genişletme + data-driven iterasyon.
 - [ ] Privacy-respecting (no PII, opt-in)
 
 ### 3.3 İçerik Genişlemesi
-- [ ] Phrasal verbs kütüphanesi (zaten PDF mevcut)
+- [x] Phrasal verbs kütüphanesi (zaten PDF mevcut): `scripts/parse_phrasal_verbs.py` iki PDF'i (AKIN Dil ~220 entry + YDS 149 entry) parse edip merge ediyor — 56 AKIN unique + 139 YDS unique + 9 overlap = **195 phrasal verb**, B2 default, topic [general]. Çıktı `Lexmind/Resources/phrasalverbs.json`. Yeni `Services/PhrasalVerbsLibrary.swift` (OxfordWordsLibrary pattern'inin near-clone'u) yüklüyor — `find`, `byTerm`, `filtered`, `preload`. `Signpost.library.loadPhrasalVerbs` interval. `MergedLibrary` artık 3 kaynaktan dedupe ediyor; yeni `MergedLibrary.preloadAll()` helper'ı 5 callsite'ı (AddWord/LibraryImport/Study/WordDetail/ReadingPassage) tek satıra indirgedi. QuickLookupService `prime` ve AddWordView `applyLibraryLookup` artık phrasal verbs'i de fallback'e dahil ediyor. 67 unit test geçer
 - [ ] Daha fazla CEFR seviyesi içerik
 - [ ] Kullanıcı-paylaşımı kelime listeleri (Pro feature?)
 

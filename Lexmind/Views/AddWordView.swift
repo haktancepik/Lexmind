@@ -133,12 +133,7 @@ struct AddWordView: View {
                     .accessibilityHint(Text("Kelimeyi kütüphaneye ekler ve formu kapatır"))
                 }
             }
-            .task {
-                async let common: Void = CommonWordsLibrary.preload()
-                async let oxford: Void = OxfordWordsLibrary.preload()
-                _ = await common
-                _ = await oxford
-            }
+            .task { await MergedLibrary.preloadAll() }
             .sheet(isPresented: $showPaywall) {
                 PaywallView(entitlements: entitlements)
             }
@@ -175,7 +170,9 @@ struct AddWordView: View {
 
     @discardableResult
     private func applyLibraryLookup(_ term: String) -> Bool {
-        if let match = CommonWordsLibrary.find(term) ?? OxfordWordsLibrary.find(term) {
+        if let match = CommonWordsLibrary.find(term)
+            ?? OxfordWordsLibrary.find(term)
+            ?? PhrasalVerbsLibrary.find(term) {
             applyCommonWord(match)
             return true
         }

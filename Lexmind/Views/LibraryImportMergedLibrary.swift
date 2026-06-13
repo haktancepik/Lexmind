@@ -2,10 +2,11 @@
 //  LibraryImportMergedLibrary.swift
 //  Lexmind
 //
-//  Pulls Common + Oxford word libraries into a single de-duplicated
-//  list (Common wins on collision because it ships with the richest
-//  metadata). Lives outside `LibraryImportView` so subviews can read
-//  it without having to be nested inside the main view.
+//  Pulls Common + Oxford + PhrasalVerbs word libraries into a single
+//  de-duplicated list (earlier sources win on collision because they
+//  ship with the richest metadata: Common > Oxford > PhrasalVerbs).
+//  Lives outside `LibraryImportView` so subviews can read it without
+//  having to be nested inside the main view.
 //
 
 import Foundation
@@ -15,8 +16,14 @@ enum MergedLibrary {
     static let all: [CommonWord] = {
         var seen = Set<String>()
         var merged: [CommonWord] = []
-        merged.reserveCapacity(CommonWordsLibrary.all.count + OxfordWordsLibrary.all.count)
-        for word in CommonWordsLibrary.all + OxfordWordsLibrary.all {
+        merged.reserveCapacity(
+            CommonWordsLibrary.all.count
+            + OxfordWordsLibrary.all.count
+            + PhrasalVerbsLibrary.all.count
+        )
+        for word in CommonWordsLibrary.all
+            + OxfordWordsLibrary.all
+            + PhrasalVerbsLibrary.all {
             let key = word.term.lowercased()
             if seen.insert(key).inserted {
                 merged.append(word)
@@ -33,6 +40,20 @@ enum MergedLibrary {
             if let topic, !word.topics.contains(topic) { return false }
             return true
         }
+    }
+
+    /// Warms every underlying library in parallel so subsequent
+    /// `MergedLibrary.all` access on the main thread is free. Idempotent
+    /// — each library is its own static let, so repeat calls return
+    /// immediately. Single seam to add new sources to (next time we add
+    /// e.g. TOEFL or idioms, only this method needs to grow).
+    static func preloadAll() async {
+        async let common: Void = CommonWordsLibrary.preload()
+        async let oxford: Void = OxfordWordsLibrary.preload()
+        async let phrasal: Void = PhrasalVerbsLibrary.preload()
+        _ = await common
+        _ = await oxford
+        _ = await phrasal
     }
 }
 

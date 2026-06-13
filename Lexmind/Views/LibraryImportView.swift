@@ -116,10 +116,7 @@ struct LibraryImportView: View {
             }
             .task {
                 guard !librariesReady else { return }
-                async let common: Void = CommonWordsLibrary.preload()
-                async let oxford: Void = OxfordWordsLibrary.preload()
-                _ = await common
-                _ = await oxford
+                await MergedLibrary.preloadAll()
                 librariesReady = true
             }
             .sheet(isPresented: $showPaywall) {

@@ -152,6 +152,13 @@ final class QuickLookupService {
             return true
         }
 
+        if let phrasal = PhrasalVerbsLibrary.find(key) {
+            let result: LookupResult = .common(phrasal)
+            cache[key] = result
+            phase = .ready(term: key, result: result)
+            return true
+        }
+
         phase = .loading(term: key)
         return false
     }
