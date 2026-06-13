@@ -53,13 +53,13 @@ struct SwiftDataMigrationTests {
 
     // MARK: - SchemaMigrationPlan setup
 
+    @Test func migrationPlan_hasExactlyOneStage() {
+        #expect(LexmindMigrationPlan.stages.count == 1)
+    }
+
     @Test func migrationPlan_listsBothShippedSchemas() {
         let names = LexmindMigrationPlan.schemas.map { String(describing: $0) }
         #expect(names == ["LexmindSchemaV1", "LexmindSchemaV2"])
-    }
-
-    @Test func migrationPlan_hasExactlyOneStage() {
-        #expect(LexmindMigrationPlan.stages.count == 1)
     }
 
     // MARK: - Container wiring

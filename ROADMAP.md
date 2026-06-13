@@ -190,12 +190,36 @@ HomeView'da inline Stepper var ama yetersiz. StoreKit, bildirim, GDPR, dil seçi
 
 Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 
-### 2.1 CloudKit Sync
-- [ ] SwiftData şemasını CloudKit-uyumlu hale getir (unique constraint → composite, optional alanlar)
-- [ ] `ModelConfiguration(cloudKitDatabase: .private("iCloud.com.lexmind"))`
-- [ ] Capabilities → iCloud + CloudKit aktif
-- [ ] Conflict resolution stratejisi (en son yazan kazanır + ReviewLog append-only)
-- [ ] İki cihazlı manuel test: yeni kelime, review, silme
+### 2.1 CloudKit Sync — **Faz 3'e ertelendi**
+
+**Sebep (2026-06-12 denemesinde keşfedildi):** SwiftData VersionedSchema model identity'sini Swift tip referansından alıyor. Bir `@Model` üzerindeki `@Attribute(.unique)` modifier'ını kaldırıp yeni bir `LexmindSchemaV3` tanımlamak, V2 ve V3'ün hash-equal görünmesine yol açıyor (`NSInvalidArgumentException: model reference cannot be equal`). Apple'ın resmi yaklaşımı: V3'ün içinde **namespaced model tipleri** tanımlanmalı (her `VersionedSchema` kendi nested `@Model class Word` versiyonunu içerir) — bu invasive bir refactor, mevcut tüm caller-side referansların V2/V3 disambiguation gerektirir.
+
+**Mevcut durumda olan altyapı:** AddWordView.save() bir caller-side `existingWords` dedupe kontrolü tutuyor (typed error + AI çağrısı kaçışı) — CloudKit'siz de zararsız.
+
+**Faz 3 için yapılacaklar listesi:**
+- [ ] `LexmindSchemaV3` namespaced model tipleri ile: `enum LexmindSchemaV3 { @Model final class Word { ... } /* .unique yok */ }`. Aynı şekilde WordDeck, DailyGoal, DailyReadingPassage
+- [ ] `v2ToV3` MigrationStage (custom): V2 modellerinden V3 namespaced modellerine veri kopyala, term/id dedupe, DailyGoal singleton collapse
+- [ ] Tüm caller-side `Word`/`WordDeck`/`DailyGoal` referanslarını V3 namespaced tiplere migrate et (büyük refactor — typealias trick'i veya wholesale rename)
+- [ ] `ModelConfiguration(schema:cloudKitDatabase:)` `.private("iCloud.com.haktancepik.Lexmind")` ile bağla
+- [ ] Capabilities → iCloud + CloudKit aktif (Xcode UI, kullanıcı tarafı)
+- [ ] Apple Developer Console → App ID'ye iCloud capability ekle (kullanıcı tarafı)
+- [ ] App Store Connect → iCloud Container yarat (kullanıcı tarafı)
+- [ ] CloudKit Dashboard → V3 schema deploy (kullanıcı tarafı)
+- [ ] Conflict resolution stratejisi (en son yazan kazanır + ReviewLog append-only — kod hazır, sadece test gerek)
+- [ ] `LaunchTimeDedupe` helper (eski `CloudKitMigrationDefenses` benzeri) — sync sonrası `Word.term`/`DailyGoal` duplicate cleanup
+
+**Faz 3'te test edilecekler:**
+- [ ] V3 namespaced types ile lightweight migration build geçiyor mu (model reference equality hatası yeniden çıkmamalı)
+- [ ] V2 → V3 round-trip: V2 store'undaki Word'ler V3 namespace'e doğru kopyalanıyor mu
+- [ ] V3 willMigrate/didMigrate'in `Word.term` ve `DailyGoal` dedupe attempt'i çalışıyor mu (unit test)
+- [ ] iCloud container reachable olduğunda ModelContainer init başarılı mı (entitlement test)
+- [ ] İki cihazlı manuel sync test: cihaz A'da kelime ekle → cihaz B'de 30 sn içinde görünür mü
+- [ ] İki cihazlı conflict: aynı kelimeyi paralel düzenle → last-writer-wins doğrulaması
+- [ ] ReviewLog append-only davranışı: aynı word'e iki cihazdan rating → her iki log da bulutta görünür
+- [ ] CloudKit silme: cihaz A'da kelime sil → cihaz B'de senkronize siliniyor mu
+- [ ] Yedek/restore akışı (BackupService) CloudKit aktifken hâlâ çalışıyor mu (idempotent merge)
+
+**Geçici durum:** Faz 1 ve Faz 2 boyunca yerel-only çalışıyor. Kullanıcı `BackupService` ile JSON yedek alıp manuel olarak başka cihaza taşıyabilir (2.5'te yapıldı).
 
 ### 2.2 StoreKit 2 + Paywall
 - [x] Free tier sınırı: 100 kelime, günde 1 reading passage, kütüphane import kısıtlı: `FreeTier` enum (`maxWords=100`, `maxReadingPassagesPerDay=1`, `wordCapReached(currentCount:)`); AddWordView ve LibraryImportView import sırasında kontrol eder, sınır aşılırsa paywall sheet

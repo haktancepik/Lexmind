@@ -237,9 +237,16 @@ struct AddWordView: View {
         let cleanedTerm = trimmedTerm.lowercased()
         guard !cleanedTerm.isEmpty else { return }
 
+        // Caller-side dedupe — SwiftData's `@Attribute(.unique)` would
+        // catch this too, but a typed error message reads better than
+        // a generic save failure and lets us skip the AI analysis spend.
+        if existingWords.contains(where: { $0.term == cleanedTerm }) {
+            errorMessage = "Bu kelime zaten kütüphanende."
+            return
+        }
+
         // Free tier: cap at FreeTier.maxWords. Existing rows are
-        // counted (not the incoming word); duplicates would be caught
-        // downstream by the unique constraint anyway.
+        // counted (not the incoming word).
         if !entitlements.isPro,
            FreeTier.wordCapReached(currentCount: existingWords.count) {
             showPaywall = true

@@ -9,6 +9,13 @@
 //      decks. V1 → V2 stage seeds six preset decks and binds existing
 //      Word rows to their level's preset.
 //
+//  CloudKit migration is deferred to Phase 3. SwiftData hashes model
+//  identity from Swift type references, so a CloudKit-shaped V3 needs
+//  namespaced model types inside the `VersionedSchema` (Apple's
+//  documented pattern) — stripping `@Attribute(.unique)` modifiers in
+//  place would make consecutive versions hash-equal and SwiftData
+//  refuses that. The refactor is left for a dedicated session.
+//
 
 import Foundation
 import SwiftData
