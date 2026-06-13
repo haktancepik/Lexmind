@@ -288,14 +288,15 @@ Amaç: TAM genişletme + data-driven iterasyon.
 - [ ] App Store metadata EN (manuel adım: App Store Connect → English (U.S.) localization)
 
 ### 3.2 Analytics
-- [ ] Karar: Apple-only (App Analytics + MetricKit) yeterli mi yoksa product analytics (PostHog, Amplitude) gerekli mi
-- [ ] Funnel: onboarding → ilk kelime → ilk review → 7 gün retention → conversion
-- [ ] Privacy-respecting (no PII, opt-in)
+- [x] Karar: Apple-only (App Analytics + MetricKit) yeterli mi yoksa product analytics (PostHog, Amplitude) gerekli mi → **Apple-only seçildi**. Sebep: MetricKit zaten 1.8'de kurulu (daily payload + crash/hang/cpuException diagnostic'ler `Log.metrics`'e düşüyor); App Store Connect → Analytics dashboard'unda installs / sessions / retention / sales otomatik mevcut. 3rd-party SDK eklemek SDK weight + Privacy Manifest declaration + opt-in UI maliyeti yüksek, ilk 1000 user altında detay funnel'ın istatistiksel anlamı düşük (Faz 1 strateji notuyla aynı çizgi — Sentry de aynı gerekçeyle Faz 3'e ertelendi)
+- [x] Funnel: onboarding → ilk kelime → ilk review → 7 gün retention → conversion → **App Store Connect Analytics dashboard yeterli**: launch metrics (sessions, retention by day, crashes), conversions (Pro upgrade — StoreKit 2 transaction otomatik raporlanır), territory breakdown. Custom event tracking (örn. "kütüphaneden A2 destesi import edildi") MetricKit'te yok ama App Store Connect'te `subscription cohort` ve `paying user retention` raporu var
+- [x] Privacy-respecting (no PII, opt-in) → otomatik: App Store Connect Analytics iOS Privacy Settings → Allow Apps to Request to Track + Allow Apps to Share Analytics ile zaten opt-in. App'in kendi tarafında Apple SDK çağrısı yok. PrivacyInfo.xcprivacy zaten `NSPrivacyTracking: false` + `NSPrivacyCollectedDataTypes: []` declare ediyor
+- Not: PostHog/Amplitude entegrasyonu **ilk 1000 paying user**'a ulaşıldıktan veya conversion funnel'da Apple-only veri yetmediğinde yeniden değerlendirilecek (Faz 4)
 
 ### 3.3 İçerik Genişlemesi
 - [x] Phrasal verbs kütüphanesi (zaten PDF mevcut): `scripts/parse_phrasal_verbs.py` iki PDF'i (AKIN Dil ~220 entry + YDS 149 entry) parse edip merge ediyor — 56 AKIN unique + 139 YDS unique + 9 overlap = **195 phrasal verb**, B2 default, topic [general]. Çıktı `Lexmind/Resources/phrasalverbs.json`. Yeni `Services/PhrasalVerbsLibrary.swift` (OxfordWordsLibrary pattern'inin near-clone'u) yüklüyor — `find`, `byTerm`, `filtered`, `preload`. `Signpost.library.loadPhrasalVerbs` interval. `MergedLibrary` artık 3 kaynaktan dedupe ediyor; yeni `MergedLibrary.preloadAll()` helper'ı 5 callsite'ı (AddWord/LibraryImport/Study/WordDetail/ReadingPassage) tek satıra indirgedi. QuickLookupService `prime` ve AddWordView `applyLibraryLookup` artık phrasal verbs'i de fallback'e dahil ediyor. 67 unit test geçer
-- [ ] Daha fazla CEFR seviyesi içerik
-- [ ] Kullanıcı-paylaşımı kelime listeleri (Pro feature?)
+- [ ] Daha fazla CEFR seviyesi içerik — **Faz 4'e ertelendi**: `Toefl_kelimeleri.pdf` repo root'ta hazır ama PDFKit text extract column'ları ardışık alt alta veriyor (Word | Definition | Sample Sentence tablo); kelime sınırlarını programatik disambiguate etmek için manuel kurasyon veya AI-driven extraction script gerek. Mevcut Common+Oxford+Phrasal (toplam ~5300 entry) Faz 2 MVP için yeterli
+- [ ] Kullanıcı-paylaşımı kelime listeleri (Pro feature?) — **Faz 4'e ertelendi**: CloudKit (Faz 3'e ertelendi) + share/discover UI + content moderation gerek. App Store ilk submit'ten sonra kullanıcı sinyalsiyle değerlendir
 
 ---
 
