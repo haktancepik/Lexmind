@@ -283,9 +283,9 @@ Amaç: Para kazanmaya ve kullanıcı tutmaya hazır.
 Amaç: TAM genişletme + data-driven iterasyon.
 
 ### 3.1 İngilizce Lokalizasyon
-- [ ] String Catalog'da EN sütununu doldur
-- [ ] UI ekran görüntüleri EN versiyonu (App Store için)
-- [ ] App Store metadata EN
+- [x] String Catalog'da EN sütununu doldur: `scripts/fill_english_strings.py` 205 entry'lik el-yazımı TR→EN map ile `Localizable.xcstrings`'in `en` localization'larını topluca doldurur (state="translated"). Yeni TR key eklendiğinde script tekrar çalıştırılır — map'te olmayan key uyarı verir. Apple-style copy: "Çalış"→"Study", "Hadi başlayalım"→"Let's get started", "Tekrar"→"Again", "Kolay"→"Easy", positional args (`%1$@`/`%2$lld`) korunur. 205/205 coverage
+- [ ] UI ekran görüntüleri EN versiyonu (App Store için — manuel adım: simulator dilini EN'e çevirip her ekrandan ⌘S)
+- [ ] App Store metadata EN (manuel adım: App Store Connect → English (U.S.) localization)
 
 ### 3.2 Analytics
 - [ ] Karar: Apple-only (App Analytics + MetricKit) yeterli mi yoksa product analytics (PostHog, Amplitude) gerekli mi
